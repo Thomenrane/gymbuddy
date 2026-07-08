@@ -28,7 +28,7 @@ export default async function RecipeDetailPage({
       </Link>
 
       <header className="space-y-2">
-        <h1 className="font-display text-3xl font-bold leading-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {recipe.name}
         </h1>
         <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
@@ -50,10 +50,10 @@ export default async function RecipeDetailPage({
         </div>
       </header>
 
-      <section className="rounded-2xl border border-border bg-surface p-4">
+      <section className="rounded-lg border border-border bg-surface p-4">
         <div className="flex items-end justify-between">
           <div>
-            <span className="font-display text-4xl font-bold leading-none">
+            <span className="text-3xl font-semibold leading-none">
               {recipe.kcal}
             </span>
             <span className="ml-1 text-sm text-muted">kcal</span>
@@ -74,8 +74,8 @@ export default async function RecipeDetailPage({
         </div>
         <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
           <MacroTile label="Protéines" value={recipe.protein_g} color="text-macro-p" />
-          <MacroTile label="Glucides" value={recipe.carbs_g} color="text-macro-g" />
-          <MacroTile label="Lipides" value={recipe.fat_g} color="text-macro-l" />
+          <MacroTile label="Glucides" value={recipe.carbs_g} color="text-foreground" />
+          <MacroTile label="Lipides" value={recipe.fat_g} color="text-foreground" />
         </dl>
         {recipe.fiber_g != null && (
           <p className="mt-2 text-center text-xs text-muted">
@@ -85,13 +85,13 @@ export default async function RecipeDetailPage({
       </section>
 
       <section>
-        <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-muted">
+        <h2 className="text-sm font-medium text-muted">
           Ingrédients
         </h2>
-        <ul className="mt-2 divide-y divide-border rounded-2xl border border-border bg-surface">
+        <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-surface">
           {recipe.ingredients.map((ing, i) => (
             <li key={i} className="flex items-baseline gap-3 px-4 py-3">
-              <span className="font-display min-w-14 text-right font-semibold">
+              <span className="min-w-14 text-right font-semibold">
                 {ing.qty}
                 <span className="ml-0.5 text-xs font-normal text-muted">
                   {ing.unit}
@@ -110,13 +110,13 @@ export default async function RecipeDetailPage({
 
       {(recipe.steps ?? []).length > 0 && (
         <section>
-          <h2 className="font-display text-lg font-semibold uppercase tracking-wide text-muted">
+          <h2 className="text-sm font-medium text-muted">
             Préparation
           </h2>
           <ol className="mt-2 space-y-2">
             {recipe.steps!.map((step, i) => (
               <li key={i} className="flex gap-3">
-                <span className="font-display mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-raised text-sm font-semibold">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-raised text-sm font-semibold">
                   {i + 1}
                 </span>
                 <span className="leading-relaxed">{step}</span>
@@ -140,7 +140,7 @@ function Badge({
 }) {
   return (
     <span
-      className={`rounded-full border border-border bg-surface px-2.5 py-1 ${className}`}
+      className={`rounded-md border border-border bg-surface px-2.5 py-1 ${className}`}
     >
       {children}
     </span>
@@ -157,8 +157,8 @@ function MacroTile({
   color: string;
 }) {
   return (
-    <div className="rounded-xl bg-surface-raised px-2 py-3">
-      <dd className={`font-display text-xl font-bold ${color}`}>
+    <div className="rounded-md bg-surface-raised px-2 py-3">
+      <dd className={`text-lg font-semibold ${color}`}>
         {Number.isInteger(Number(value)) ? value : Number(value).toFixed(1)}
         <span className="text-xs font-normal"> g</span>
       </dd>

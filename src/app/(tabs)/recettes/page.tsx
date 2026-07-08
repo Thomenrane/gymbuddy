@@ -11,7 +11,7 @@ export default async function RecettesPage() {
   return (
     <main className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl font-bold uppercase tracking-wide">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Recettes
         </h1>
         <span className="text-sm text-muted">{recipes.length} actives</span>
@@ -22,7 +22,7 @@ export default async function RecettesPage() {
       <Link
         href="/recettes/new"
         aria-label="Nouvelle recette"
-        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-lg transition-transform active:scale-95"
+        className="fixed bottom-24 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-on-primary transition-transform active:scale-95"
       >
         <Plus size={28} weight="bold" />
       </Link>

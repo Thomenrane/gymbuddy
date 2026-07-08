@@ -13,7 +13,7 @@ export default function NewRecipePage() {
         <ArrowLeft size={16} aria-hidden />
         Recettes
       </Link>
-      <h1 className="font-display text-3xl font-bold uppercase tracking-wide">
+      <h1 className="text-2xl font-semibold tracking-tight">
         Nouvelle recette
       </h1>
       <RecipeForm

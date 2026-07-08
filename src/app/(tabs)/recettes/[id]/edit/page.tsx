@@ -27,7 +27,7 @@ export default async function EditRecipePage({
         <ArrowLeft size={16} aria-hidden />
         {recipe.name}
       </Link>
-      <h1 className="font-display text-3xl font-bold uppercase tracking-wide">
+      <h1 className="text-2xl font-semibold tracking-tight">
         Modifier
       </h1>
       <RecipeForm

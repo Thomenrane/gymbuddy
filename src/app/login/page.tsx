@@ -33,13 +33,13 @@ export default function LoginPage() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
       <h1 className="text-3xl font-bold">
-        Gym <span className="text-emerald-500">Buddy</span>
+        Gym Buddy
       </h1>
       {status === "sent" ? (
         <p className="text-center text-lg">
           Magic link envoyé 📬
           <br />
-          <span className="text-sm text-neutral-400">
+          <span className="text-sm text-muted">
             Ouvre l&apos;email sur ce téléphone.
           </span>
         </p>
@@ -52,17 +52,17 @@ export default function LoginPage() {
             placeholder="ton@email.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-14 rounded-xl border border-neutral-700 bg-neutral-900 px-4 text-lg outline-none focus:border-emerald-500"
+            className="h-14 rounded-md border border-border bg-surface px-4 text-lg outline-none focus:border-muted"
           />
           <button
             type="submit"
             disabled={status === "sending"}
-            className="h-14 rounded-xl bg-emerald-600 text-lg font-semibold active:bg-emerald-700 disabled:opacity-50"
+            className="h-14 rounded-md bg-primary text-lg font-semibold text-on-primary active:bg-primary-pressed disabled:opacity-50"
           >
             {status === "sending" ? "Envoi…" : "Recevoir le magic link"}
           </button>
           {status === "error" && (
-            <p role="alert" className="text-center text-sm text-red-400">
+            <p role="alert" className="text-center text-sm text-destructive">
               {errorMsg}
             </p>
           )}

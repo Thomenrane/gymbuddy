@@ -7,7 +7,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
   return (
     <Link
       href={`/recettes/${recipe.id}`}
-      className="block rounded-2xl border border-border bg-surface p-4 transition-transform active:scale-[0.98]"
+      className="block rounded-lg border border-border bg-surface p-4 transition-transform active:scale-[0.98]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -27,7 +27,7 @@ export function RecipeCard({ recipe }: { recipe: Recipe }) {
           </p>
         </div>
         <div className="shrink-0 text-right">
-          <span className="font-display text-2xl font-semibold leading-none">
+          <span className="text-2xl font-semibold leading-none">
             {recipe.kcal}
           </span>
           <span className="block text-xs text-muted">kcal</span>

@@ -54,7 +54,7 @@ export function RecipesList({ recipes }: { recipes: Recipe[] }) {
 
   return (
     <div className="space-y-4">
-      <label className="flex h-12 items-center gap-2 rounded-xl border border-border bg-surface px-3 focus-within:border-primary">
+      <label className="flex h-12 items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:border-muted">
         <MagnifyingGlass size={20} className="shrink-0 text-muted" aria-hidden />
         <input
           type="search"
@@ -103,7 +103,7 @@ export function RecipesList({ recipes }: { recipes: Recipe[] }) {
       ) : grouped ? (
         grouped.map(({ cat, items }) => (
           <section key={cat} className="space-y-2">
-            <h2 className="pt-2 font-display text-lg font-semibold uppercase tracking-wide text-muted">
+            <h2 className="pt-2 text-sm font-medium text-muted">
               {CATEGORY_LABELS[cat]}
               <span className="ml-2 text-sm font-normal">{items.length}</span>
             </h2>
@@ -139,7 +139,7 @@ function FilterChip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`shrink-0 rounded-full border font-medium transition-colors ${
+      className={`shrink-0 rounded-md border font-medium transition-colors ${
         small ? "px-3 py-1.5 text-sm" : "px-4 py-2"
       } ${
         active

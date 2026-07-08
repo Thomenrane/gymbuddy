@@ -14,7 +14,7 @@ import type { RecipeFormState } from "@/app/(tabs)/recettes/actions";
 type IngredientRow = { item: string; qty: string; unit: string; note: string };
 
 const inputCls =
-  "h-12 w-full rounded-xl border border-border bg-surface px-3 text-base outline-none placeholder:text-muted focus:border-primary";
+  "h-12 w-full rounded-md border border-border bg-surface px-3 text-base outline-none placeholder:text-muted focus:border-muted";
 
 export function RecipeForm({
   initial,
@@ -82,7 +82,7 @@ export function RecipeForm({
               type="button"
               aria-pressed={category === cat}
               onClick={() => setCategory(cat)}
-              className={`rounded-full border px-4 py-2 font-medium transition-colors ${
+              className={`rounded-md border px-4 py-2 font-medium transition-colors ${
                 category === cat
                   ? "border-primary bg-primary text-on-primary"
                   : "border-border bg-surface"
@@ -115,7 +115,7 @@ export function RecipeForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Protéines (g) *" labelClass="text-macro-p">
+        <Field label="Protéines (g) *">
           <input
             name="protein_g"
             inputMode="decimal"
@@ -124,7 +124,7 @@ export function RecipeForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Glucides (g) *" labelClass="text-macro-g">
+        <Field label="Glucides (g) *">
           <input
             name="carbs_g"
             inputMode="decimal"
@@ -133,7 +133,7 @@ export function RecipeForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Lipides (g) *" labelClass="text-macro-l">
+        <Field label="Lipides (g) *">
           <input
             name="fat_g"
             inputMode="decimal"
@@ -157,7 +157,7 @@ export function RecipeForm({
           {ingredients.map((row, i) => (
             <div
               key={i}
-              className="space-y-2 rounded-xl border border-border bg-surface p-3"
+              className="space-y-2 rounded-md border border-border bg-surface p-3"
             >
               <div className="flex gap-2">
                 <input
@@ -176,7 +176,7 @@ export function RecipeForm({
                         prev.filter((_, idx) => idx !== i)
                       )
                     }
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border text-muted"
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-border text-muted"
                   >
                     <X size={20} />
                   </button>
@@ -216,7 +216,7 @@ export function RecipeForm({
                 { item: "", qty: "", unit: "g", note: "" },
               ])
             }
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-sm font-medium text-muted"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border text-sm font-medium text-muted"
           >
             <Plus size={16} /> Ajouter un ingrédient
           </button>
@@ -237,7 +237,7 @@ export function RecipeForm({
                     prev.map((s, idx) => (idx === i ? e.target.value : s))
                   )
                 }
-                className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-base outline-none placeholder:text-muted focus:border-primary"
+                className="w-full rounded-md border border-border bg-surface px-3 py-2.5 text-base outline-none placeholder:text-muted focus:border-muted"
               />
               {steps.length > 1 && (
                 <button
@@ -246,7 +246,7 @@ export function RecipeForm({
                   onClick={() =>
                     setSteps((prev) => prev.filter((_, idx) => idx !== i))
                   }
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border text-muted"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-border text-muted"
                 >
                   <X size={20} />
                 </button>
@@ -256,7 +256,7 @@ export function RecipeForm({
           <button
             type="button"
             onClick={() => setSteps((prev) => [...prev, ""])}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border text-sm font-medium text-muted"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border text-sm font-medium text-muted"
           >
             <Plus size={16} /> Ajouter une étape
           </button>
@@ -275,7 +275,7 @@ export function RecipeForm({
       {state?.error && (
         <p
           role="alert"
-          className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
           {state.error}
         </p>
@@ -284,14 +284,14 @@ export function RecipeForm({
       <div className="flex gap-2 pb-4">
         <Link
           href={cancelHref}
-          className="flex h-13 flex-1 items-center justify-center rounded-xl border border-border bg-surface font-semibold"
+          className="flex h-13 flex-1 items-center justify-center rounded-md border border-border bg-surface font-semibold"
         >
           Annuler
         </Link>
         <button
           type="submit"
           disabled={pending}
-          className="h-13 flex-[2] rounded-xl bg-primary py-3.5 font-semibold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
+          className="h-13 flex-[2] rounded-md bg-primary py-3.5 font-semibold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
         >
           {pending ? "Sauvegarde…" : submitLabel}
         </button>

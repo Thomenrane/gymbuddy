@@ -38,18 +38,19 @@ export function MacroValues({
   fat: number;
   className?: string;
 }) {
+  // Monochrome sauf protéines (KPI n°1) : la valeur P porte l'accent.
   return (
     <div className={`flex gap-3 text-sm ${className}`}>
       <span>
-        <span className="font-semibold text-macro-p">{fmt(protein)}</span>
+        <span className="font-medium text-macro-p">{fmt(protein)}</span>
         <span className="text-muted"> P</span>
       </span>
       <span>
-        <span className="font-semibold text-macro-g">{fmt(carbs)}</span>
+        <span className="font-medium">{fmt(carbs)}</span>
         <span className="text-muted"> G</span>
       </span>
       <span>
-        <span className="font-semibold text-macro-l">{fmt(fat)}</span>
+        <span className="font-medium">{fmt(fat)}</span>
         <span className="text-muted"> L</span>
       </span>
     </div>

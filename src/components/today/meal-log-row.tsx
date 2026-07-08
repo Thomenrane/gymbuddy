@@ -36,7 +36,11 @@ export function MealLogRow({ log }: { log: MealLog }) {
           </span>
           {(log.notes || !log.recipe_id) && (
             <span className="block truncate text-xs text-muted">
-              {[!log.recipe_id ? "log libre" : null, log.notes]
+              {[
+                !log.recipe_id ? "log libre" : null,
+                log.is_estimate ? "estimé" : null,
+                log.notes,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </span>

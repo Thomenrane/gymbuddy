@@ -13,6 +13,12 @@ const SLOTS = ["petit_dej", "dejeuner", "collation", "diner", "extra"];
 const WORKOUT_TYPES = ["muscu", "running", "padel", "autre"];
 // Compteurs Alan (tags des recettes loggées)
 const ALAN_TAGS = ["poisson", "pates", "hache", "oeufs", "legumineuses"] as const;
+// Workouts seedés pour le pré-remplissage des poids : exclus des stats
+// (get_day, get_summary, get_workouts) mais conservés dans
+// get_exercise_history — c'est leur raison d'être (décision PO, lot 2.1).
+const BASELINE_NOTE = "baseline seed — poids de départ";
+const notBaseline = <T extends { notes?: string | null }>(rows: T[]) =>
+  rows.filter((w) => w.notes !== BASELINE_NOTE);
 
 function fail(message: string): never {
   throw new Error(message);
@@ -92,7 +98,7 @@ export async function getDay(date: string) {
       fat_g: roundMacro(totals.fat_g - targets.fat_g),
     },
     meal_logs: logs.data,
-    workouts: workouts.data,
+    workouts: notBaseline(workouts.data ?? []),
     body_metric: metric.data ?? null,
   };
 }
@@ -165,7 +171,7 @@ export async function getSummary(startDate: string, endDate: string) {
     }));
 
   const workoutsByType: Record<string, number> = {};
-  for (const w of workouts.data ?? [])
+  for (const w of notBaseline(workouts.data ?? []))
     workoutsByType[w.type] = (workoutsByType[w.type] ?? 0) + 1;
 
   return {
@@ -260,6 +266,7 @@ export async function logMeal(input: {
   free_label?: string;
   macros?: { kcal: number; protein_g?: number; carbs_g?: number; fat_g?: number };
   notes?: string;
+  is_estimate?: boolean;
 }) {
   const date = assertDate(input.date ?? brusselsDay());
   if (!SLOTS.includes(input.slot)) fail(`slot invalide (${SLOTS.join("|")}).`);
@@ -308,6 +315,7 @@ export async function logMeal(input: {
       carbs_g: roundMacro(input.macros.carbs_g ?? 0),
       fat_g: roundMacro(input.macros.fat_g ?? 0),
       notes: input.notes ?? null,
+      is_estimate: Boolean(input.is_estimate),
     })
     .select()
     .single();
@@ -455,7 +463,8 @@ export async function getWorkouts(startDate: string, endDate: string) {
     .lte("workout_date", end)
     .order("workout_date");
   if (error) fail(error.message);
-  return { count: (data ?? []).length, workouts: data };
+  const workouts = notBaseline(data ?? []);
+  return { count: workouts.length, workouts };
 }
 
 export async function getExerciseHistory(exerciseName: string, limit = 10) {

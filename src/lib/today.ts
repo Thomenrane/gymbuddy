@@ -22,6 +22,16 @@ export const MEAL_SLOTS: Slot[] = ["petit_dej", "dejeuner", "collation", "diner"
 
 export const PORTION_FACTORS = [0.5, 0.75, 1, 1.25, 1.5] as const;
 
+// Lot 2.1 : presets d'estimation pour les logs libres (macros PO).
+// "Une estimation vaut mieux qu'un repas non loggé."
+export const FREE_LOG_PRESETS = [
+  { label: "Repas léger", kcal: 500, protein_g: 25, carbs_g: 50, fat_g: 20 },
+  { label: "Repas moyen", kcal: 800, protein_g: 35, carbs_g: 80, fat_g: 35 },
+  { label: "Repas copieux", kcal: 1200, protein_g: 45, carbs_g: 120, fat_g: 55 },
+  { label: "Snack/dessert", kcal: 300, protein_g: 5, carbs_g: 40, fat_g: 13 },
+  { label: "Boissons (2-3 verres)", kcal: 300, protein_g: 0, carbs_g: 25, fat_g: 0 },
+] as const;
+
 export type MealLog = {
   id: string;
   log_date: string;
@@ -34,6 +44,7 @@ export type MealLog = {
   carbs_g: number;
   fat_g: number;
   notes: string | null;
+  is_estimate: boolean;
   created_at: string;
   recipe: { name: string } | null;
 };

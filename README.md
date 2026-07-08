@@ -46,6 +46,6 @@ et un accès réseau sortant vers `*.supabase.co`.
 | 0 | Fondations : schéma, seed, PWA, auth | ✅ |
 | 1 | Recettes (CRUD + dupliquer) | ✅ |
 | 2 | Aujourd'hui (log ≤2 taps, pesée, streak) | ✅ |
-| 3 | Training (templates, pré-remplissage charges) | — |
+| 3 | Training (templates, pré-remplissage charges) | ✅ |
 | 4 | MCP (14 tools) | ✅ |
 | 5 | Tendances | — |

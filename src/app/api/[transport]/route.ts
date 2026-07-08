@@ -138,6 +138,10 @@ const handler = createMcpHandler(
           })
           .optional(),
         notes: z.string().optional(),
+        is_estimate: z
+          .boolean()
+          .optional()
+          .describe("true si les macros sont une estimation (log libre estimé)"),
       },
       jsonTool((args) => svc.logMeal(args))
     );

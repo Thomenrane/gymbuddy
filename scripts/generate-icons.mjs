@@ -3,8 +3,9 @@
 import { deflateSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
 
-const BG = [16, 185, 129, 255]; // emerald-500
-const FG = [255, 255, 255, 255];
+// Monochrome (direction minimaliste PO) : haltère gris clair sur near-black.
+const BG = [10, 10, 10, 255]; // #0a0a0a
+const FG = [237, 237, 237, 255]; // #ededed
 
 function crc32(buf) {
   let c,

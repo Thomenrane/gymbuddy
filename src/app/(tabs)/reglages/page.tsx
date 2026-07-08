@@ -1,0 +1,43 @@
+import Link from "next/link";
+import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
+import { getTargets } from "@/lib/today-server";
+import { TargetsForm } from "@/components/settings/targets-form";
+
+export const dynamic = "force-dynamic";
+
+export default async function ReglagesPage() {
+  const targets = await getTargets();
+
+  return (
+    <main className="space-y-5">
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm text-muted"
+      >
+        <ArrowLeft size={16} aria-hidden />
+        Aujourd&apos;hui
+      </Link>
+      <h1 className="text-2xl font-semibold tracking-tight">Réglages</h1>
+
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-muted">
+          Cibles journalières
+        </h2>
+        <TargetsForm targets={targets} />
+        <p className="mt-2 text-xs text-muted">
+          Protocole : ajuste selon la moyenne hebdo de poids après ~3 semaines.
+        </p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium text-muted">À venir</h2>
+        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
+          Gestion des templates de séances — Phase 3
+        </div>
+        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
+          Connecteur MCP pour Claude — Phase 4
+        </div>
+      </section>
+    </main>
+  );
+}

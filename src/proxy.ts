@@ -50,7 +50,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Tout sauf assets statiques et fichiers PWA
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|apple-icon).*)",
+    // Tout sauf assets statiques, fichiers PWA et l'API MCP.
+    // /api/mcp est exclu du middleware : il a sa propre auth bearer, et le
+    // passage par le proxy Edge est inutile (getUser() par requête) et peut
+    // altérer les headers en production.
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|icons/|apple-icon|api/mcp).*)",
   ],
 };

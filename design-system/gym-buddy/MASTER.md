@@ -1,210 +1,43 @@
-# Design System Master File
+# Design System Master File — Gym Buddy
 
-> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
-> If that file exists, its rules **override** this Master file.
-> If not, strictly follow the rules below.
+> Source de vérité pour toutes les phases UI. Direction fixée par le PO
+> le 2026-07-08 (remplace la proposition "athlétique OLED/orange", rejetée).
+> Quand tu construis une page, suis strictement ces règles.
 
----
+**Direction : minimalisme fonctionnel monochrome** — niveau de finition
+Vercel / Supabase / Linear. App dark-only, mobile-first, usage au pouce.
 
-**Project:** Gym Buddy
-**Generated:** 2026-07-08 08:55:39
-**Category:** Calorie & Nutrition Counter
+## Règles
 
----
+1. **Base strictement monochrome.** Fond `#0a0a0a`, surfaces `#101010` /
+   `#171717`, bordures 1px `#242424`, texte `#ededed`, secondaire `#a1a1a1`,
+   estompé `#666666`. La hiérarchie passe par la graisse de police et les
+   niveaux de gris — jamais par la couleur.
+2. **Couleur = information, jamais décoration.** Une teinte n'apparaît que
+   si elle porte un état, une progression ou une sémantique :
+   - `--accent #3ecf8e` (vert sobre type Supabase) : progression,
+     succès, protéines (KPI n°1 de la recomp).
+   - `--destructive #e5484d` (rouge désaturé) : erreurs, actions
+     destructives, dépassements.
+   - Interdits : couleurs par catégorie, fonds colorés, gradients,
+     ornements, icônes colorées décoratives.
+3. **CTA monochromes** : bouton principal blanc (`#ededed`) sur noir,
+   boutons secondaires bordés 1px, actions destructives en rouge sobre.
+4. **Typographie : une seule famille (Geist)**, graisses 400/500/600/700.
+   `tabular-nums` obligatoire sur tous les chiffres (kcal, macros, poids,
+   charges). Pas de police display.
+5. **Formes** : coins peu arrondis (`rounded-md`/`rounded-lg` max),
+   bordures 1px, **zéro ombre décorative**, densité d'information élevée.
+6. **Macro-bar** (composant signature conservé) : segments
+   P `#3ecf8e` / G `#8f8f8f` / L `#4a4a4a` — le vert marque la protéine,
+   le reste est encodé en gris. Valeurs texte blanches, labels gris,
+   valeur protéines en vert.
+7. **Icônes** : Phosphor (`@phosphor-icons/react`), monochromes,
+   jamais d'emoji. Icône PWA monochrome (blanc sur `#0a0a0a`).
+8. Accessibilité : contrastes AA minimum, touch targets ≥ 44px,
+   `prefers-reduced-motion` respecté, focus visibles.
 
-## Global Rules
+## Tokens
 
-### Color Palette
-
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#F97316` | `--color-primary` |
-| On Primary | `#0F172A` | `--color-on-primary` |
-| Secondary | `#FB923C` | `--color-secondary` |
-| Accent/CTA | `#22C55E` | `--color-accent` |
-| Background | `#1F2937` | `--color-background` |
-| Foreground | `#F8FAFC` | `--color-foreground` |
-| Muted | `#37414F` | `--color-muted` |
-| Border | `#374151` | `--color-border` |
-| Destructive | `#EF4444` | `--color-destructive` |
-| Ring | `#F97316` | `--color-ring` |
-
-**Color Notes:** Energy orange + success green
-
-### Typography
-
-- **Heading Font:** Barlow Condensed
-- **Body Font:** Barlow
-- **Mood:** sports, fitness, athletic, energetic, condensed, action
-- **Google Fonts:** [Barlow Condensed + Barlow](https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&display=swap)
-
-**CSS Import:**
-```css
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&display=swap');
-```
-
-### Spacing Variables
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--space-xs` | `4px` / `0.25rem` | Tight gaps |
-| `--space-sm` | `8px` / `0.5rem` | Icon gaps, inline spacing |
-| `--space-md` | `16px` / `1rem` | Standard padding |
-| `--space-lg` | `24px` / `1.5rem` | Section padding |
-| `--space-xl` | `32px` / `2rem` | Large gaps |
-| `--space-2xl` | `48px` / `3rem` | Section margins |
-| `--space-3xl` | `64px` / `4rem` | Hero padding |
-
-### Shadow Depths
-
-| Level | Value | Usage |
-|-------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
-
----
-
-## Component Specs
-
-### Buttons
-
-```css
-/* Primary Button */
-.btn-primary {
-  background: #22C55E;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-/* Secondary Button */
-.btn-secondary {
-  background: transparent;
-  color: #F97316;
-  border: 2px solid #F97316;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-```
-
-### Cards
-
-```css
-.card {
-  background: #1F2937;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
-}
-```
-
-### Inputs
-
-```css
-.input {
-  padding: 12px 16px;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 200ms ease;
-}
-
-.input:focus {
-  border-color: #F97316;
-  outline: none;
-  box-shadow: 0 0 0 3px #F9731620;
-}
-```
-
-### Modals
-
-```css
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
-  max-width: 500px;
-  width: 90%;
-}
-```
-
----
-
-## Style Guidelines
-
-**Style:** Flat Design Mobile (Touch-First)
-
-**Keywords:** flat, 2D, no shadow, color blocking, geometric, bold, poster, icon, touch-first, minimal, clean, tailored, cross-platform
-
-**Best For:** Cross-platform apps (iOS+Android parity), information-dense dashboards, system UI, brand illustration, onboarding flows, marketing pages, icon design
-
-**Key Effects:** Immediate press feedback (scale 0.97, no delay), color section blocking (full-width contrasting View), zero elevation/shadow, solid icon containers (colored squares/circles), geometric low-opacity shape overlays, bottom tabs solid fill (no floating)
-
-### Page Pattern
-
-**Pattern Name:** App Store Style Landing
-
-- **Conversion Strategy:** Show real screenshots. Include ratings (4.5+ stars). QR code for mobile. Platform-specific CTAs.
-- **CTA Placement:** Download buttons prominent (App Store + Play Store) throughout
-- **Section Order:** 1. Hero with device mockup, 2. Screenshots carousel, 3. Features with icons, 4. Reviews/ratings, 5. Download CTAs
-
----
-
-## Anti-Patterns (Do NOT Use)
-
-- ❌ Complex shadows
-- ❌ 3D effects
-- ❌ Muted colors
-- ❌ Low energy
-
-### Additional Forbidden Patterns
-
-- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
-- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
-- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
-- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
-- ❌ **Instant state changes** — Always use transitions (150-300ms)
-- ❌ **Invisible focus states** — Focus states must be visible for a11y
-
----
-
-## Pre-Delivery Checklist
-
-Before delivering any UI code, verify:
-
-- [ ] No emojis used as icons (use SVG instead)
-- [ ] All icons from consistent icon set (Heroicons/Lucide)
-- [ ] `cursor-pointer` on all clickable elements
-- [ ] Hover states with smooth transitions (150-300ms)
-- [ ] Light mode: text contrast 4.5:1 minimum
-- [ ] Focus states visible for keyboard navigation
-- [ ] `prefers-reduced-motion` respected
-- [ ] Responsive: 375px, 768px, 1024px, 1440px
-- [ ] No content hidden behind fixed navbars
-- [ ] No horizontal scroll on mobile
+Définis dans `src/app/globals.css` (`:root` + `@theme inline`) — ne jamais
+mettre de hex en dur dans un composant.

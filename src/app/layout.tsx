@@ -1,16 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow, Barlow_Condensed } from "next/font/google";
+import { Geist } from "next/font/google";
 import "./globals.css";
 
-const barlow = Barlow({
-  variable: "--font-barlow",
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
-});
-
-const barlowCondensed = Barlow_Condensed({
-  variable: "--font-barlow-condensed",
-  weight: ["500", "600", "700"],
+// Une seule famille typographique (direction minimaliste PO) —
+// la hiérarchie passe par la graisse et les niveaux de gris.
+const geist = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
@@ -25,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#10b981",
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
   // PWA plein pouce : pas de zoom accidentel sur les inputs
@@ -41,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${barlow.variable} ${barlowCondensed.variable} h-full antialiased`}
+      className={`${geist.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

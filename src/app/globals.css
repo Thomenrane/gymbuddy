@@ -2,26 +2,33 @@
 
 /* ============================================================
    Gym Buddy — design tokens
-   Base : design-system/gym-buddy/MASTER.md (ui-ux-pro-max),
-   adapté : fond OLED plus profond que le gray-800 proposé, et
-   système de couleurs par macro (signature de l'app) :
-   Protéines = vert (KPI n°1), Glucides = ambre, Lipides = rouge doux.
-   App dark-only (PWA mobile perso, usage soir/salle assumé).
+   Direction PO (2026-07-08) : minimalisme fonctionnel monochrome
+   (référence Vercel / Supabase / Linear).
+   - Base strictement monochrome : hiérarchie par graisse + gris.
+   - Couleur UNIQUEMENT porteuse d'information :
+       --accent  (vert sobre)  : progression, succès, protéines (KPI n°1)
+       --destructive (rouge désaturé) : erreurs, actions destructives
+     Le "primary" des CTA est monochrome (blanc sur noir).
+   - macro-p/g/l : encodage de la macro-bar — vert (protéines) +
+     deux niveaux de gris. Pas de couleur décorative.
+   - Bordures 1px, coins peu arrondis, zéro ombre décorative.
    ============================================================ */
 :root {
-  --background: #0c0e12;
-  --surface: #151921;
-  --surface-raised: #1b2029;
-  --border: #272d38;
-  --foreground: #f4f6f8;
-  --muted: #8b95a5;
-  --primary: #f97316;
-  --primary-pressed: #ea580c;
-  --on-primary: #0c0e12;
-  --destructive: #ef4444;
-  --macro-p: #4ade80;
-  --macro-g: #fbbf24;
-  --macro-l: #f87171;
+  --background: #0a0a0a;
+  --surface: #101010;
+  --surface-raised: #171717;
+  --border: #242424;
+  --foreground: #ededed;
+  --muted: #a1a1a1;
+  --faint: #666666;
+  --primary: #ededed; /* CTA monochrome : blanc sur noir */
+  --primary-pressed: #d4d4d4;
+  --on-primary: #0a0a0a;
+  --accent: #3ecf8e;
+  --destructive: #e5484d;
+  --macro-p: #3ecf8e;
+  --macro-g: #8f8f8f;
+  --macro-l: #4a4a4a;
 }
 
 @theme inline {
@@ -31,22 +38,23 @@
   --color-border: var(--border);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-faint: var(--faint);
   --color-primary: var(--primary);
   --color-primary-pressed: var(--primary-pressed);
   --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
   --color-destructive: var(--destructive);
   --color-macro-p: var(--macro-p);
   --color-macro-g: var(--macro-g);
   --color-macro-l: var(--macro-l);
-  --font-sans: var(--font-barlow);
-  --font-display: var(--font-barlow-condensed);
+  --font-sans: var(--font-geist-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-barlow), system-ui, sans-serif;
-  /* Chiffres tabulaires par défaut : kcal, macros, poids ne "sautent" pas */
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  /* Chiffres tabulaires partout : kcal, macros, poids, charges */
   font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
 }

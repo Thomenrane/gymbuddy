@@ -1,26 +1,61 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Gym Buddy — design tokens
+   Base : design-system/gym-buddy/MASTER.md (ui-ux-pro-max),
+   adapté : fond OLED plus profond que le gray-800 proposé, et
+   système de couleurs par macro (signature de l'app) :
+   Protéines = vert (KPI n°1), Glucides = ambre, Lipides = rouge doux.
+   App dark-only (PWA mobile perso, usage soir/salle assumé).
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0c0e12;
+  --surface: #151921;
+  --surface-raised: #1b2029;
+  --border: #272d38;
+  --foreground: #f4f6f8;
+  --muted: #8b95a5;
+  --primary: #f97316;
+  --primary-pressed: #ea580c;
+  --on-primary: #0c0e12;
+  --destructive: #ef4444;
+  --macro-p: #4ade80;
+  --macro-g: #fbbf24;
+  --macro-l: #f87171;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-on-primary: var(--on-primary);
+  --color-destructive: var(--destructive);
+  --color-macro-p: var(--macro-p);
+  --color-macro-g: var(--macro-g);
+  --color-macro-l: var(--macro-l);
+  --font-sans: var(--font-barlow);
+  --font-display: var(--font-barlow-condensed);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-barlow), system-ui, sans-serif;
+  /* Chiffres tabulaires par défaut : kcal, macros, poids ne "sautent" pas */
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

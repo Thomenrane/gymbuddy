@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle"
   );
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -17,7 +18,16 @@ export default function LoginPage() {
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
     });
-    setStatus(error ? "error" : "sent");
+    if (error) {
+      setErrorMsg(
+        error.code === "over_email_send_rate_limit"
+          ? "Quota d'emails atteint (2/heure). Réessaie dans une heure — les liens déjà reçus restent inutilisables."
+          : `${error.message} (${error.code ?? error.status ?? "?"})`
+      );
+      setStatus("error");
+    } else {
+      setStatus("sent");
+    }
   }
 
   return (
@@ -52,8 +62,8 @@ export default function LoginPage() {
             {status === "sending" ? "Envoi…" : "Recevoir le magic link"}
           </button>
           {status === "error" && (
-            <p className="text-center text-sm text-red-400">
-              Erreur d&apos;envoi, réessaie.
+            <p role="alert" className="text-center text-sm text-red-400">
+              {errorMsg}
             </p>
           )}
         </form>

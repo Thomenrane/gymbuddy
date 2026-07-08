@@ -391,7 +391,7 @@ function IconBtn({
   );
 }
 
-function AddExerciseSheet({
+export function AddExerciseSheet({
   catalog,
   onClose,
   onPick,

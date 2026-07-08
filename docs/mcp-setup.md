@@ -12,20 +12,36 @@ https://gymbuddy-alpha.vercel.app/api/mcp
 
 ## Authentification
 
-Bearer token statique : la valeur de la variable d'environnement
-`MCP_SECRET` (la même que dans Vercel). Pas d'OAuth en v1 — trade-off
-assumé : quiconque possède ce token a accès complet aux données.
-En cas de fuite : générer un nouveau secret (`openssl rand -base64 32`),
-le remplacer dans Vercel **et** dans le connecteur, redéployer.
+Secret statique `MCP_SECRET`, accepté sur **deux canaux** (pas d'OAuth en
+v1 — trade-off assumé : quiconque possède ce secret a accès complet) :
+
+1. Header `Authorization: Bearer <MCP_SECRET>` — tests, clients qui
+   supportent les headers custom (Claude Code, SDK…).
+2. Paramètre d'URL `?key=<MCP_SECRET>` — canal additionnel requis par
+   l'UI des connecteurs Claude.ai, qui n'offre pas de champ bearer.
+
+⚠️ **Limite connue du canal `?key=`** : l'application ne logge jamais le
+secret, mais les *request logs de la plateforme Vercel* enregistrent
+l'URL complète, paramètres compris — c'est hors de notre contrôle.
+La parade est la rotation du secret (ci-dessous). Ne partage jamais
+l'URL complète.
+
+## Rotation du secret (3 étapes)
+
+1. Générer un nouveau secret : `openssl rand -base64 32`
+2. Vercel → Settings → Environment Variables → remplacer `MCP_SECRET`
+   → redéployer (Deployments → ⋯ → Redeploy).
+3. Mettre à jour l'URL du connecteur dans Claude.ai (nouveau `?key=`)
+   — et tout autre client utilisant l'ancien secret.
 
 ## Configuration côté Claude.ai
 
 1. **Settings → Connectors → Add custom connector**
 2. Nom : `Gym Buddy`
-3. URL : `https://gymbuddy-alpha.vercel.app/api/mcp`
-4. Section avancée → **Authorization header / Bearer token** : coller la
-   valeur de `MCP_SECRET` (jamais dans le champ URL).
-5. Sauvegarder, puis activer le connecteur dans une conversation
+3. URL : `https://gymbuddy-alpha.vercel.app/api/mcp?key=<MCP_SECRET>`
+   (remplacer par la valeur réelle — c'est le seul moyen de passer le
+   secret dans cette UI ; laisser les champs OAuth vides)
+4. Add, puis activer le connecteur dans une conversation
    (icône outils → Gym Buddy).
 
 ## Prérequis côté Vercel

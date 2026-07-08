@@ -69,6 +69,20 @@ BADAUTH=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$MCP" "${HDRS[@]}" \
   -H "Authorization: Bearer invalide-$(date +%s)" -d "$JSONRPC")
 [ "$BADAUTH" = "401" ] || [ "$BADAUTH" = "403" ] && ok "token invalide → HTTP $BADAUTH" || ko "token invalide → HTTP $BADAUTH (attendu 401/403)"
 
+# Canal additionnel ?key= (FLAG 10 — UI connecteurs Claude.ai sans champ bearer).
+# Les URLs contenant le secret ne sont jamais affichées.
+TMPRESP=$(mktemp)
+KEYOK=$(curl -s -o "$TMPRESP" -w "%{http_code}" -X POST "$MCP?key=$MCP_SECRET" "${HDRS[@]}" -d "$JSONRPC")
+[ "$KEYOK" = "200" ] && grep -q "get_targets" "$TMPRESP" \
+  && ok "?key= valide → 200 + tools listés" || ko "?key= valide → HTTP $KEYOK"
+KEYBAD=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$MCP?key=invalide-cle" "${HDRS[@]}" -d "$JSONRPC")
+[ "$KEYBAD" = "401" ] || [ "$KEYBAD" = "403" ] && ok "?key= invalide → HTTP $KEYBAD" || ko "?key= invalide → HTTP $KEYBAD (attendu 401/403)"
+HDRONLY=$(curl -s -o "$TMPRESP" -w "%{http_code}" -X POST "$MCP" "${HDRS[@]}" \
+  -H "Authorization: Bearer $MCP_SECRET" -d "$JSONRPC")
+[ "$HDRONLY" = "200" ] && grep -q "get_targets" "$TMPRESP" \
+  && ok "header Bearer seul → 200 + tools listés (canal préservé)" || ko "header seul → HTTP $HDRONLY"
+rm -f "$TMPRESP"
+
 echo "-- 4. Les 14 tools (assertions de contenu) --"
 if MCP_URL="$MCP" node scripts/mcp-test-client.mjs; then
   ok "client MCP : 14 tools validés"

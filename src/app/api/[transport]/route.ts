@@ -228,14 +228,27 @@ const handler = createMcpHandler(
   }
 );
 
-// Auth : bearer statique MCP_SECRET (trade-off v1 assumé par le PO — pas
-// d'OAuth). Comparaison à temps constant, le secret n'est jamais loggé.
-function verifyToken(_req: Request, bearerToken?: string) {
-  const secret = process.env.MCP_SECRET;
-  if (!secret || !bearerToken) return undefined;
-  const a = Buffer.from(bearerToken);
+// Auth : MCP_SECRET statique (trade-off v1 assumé par le PO — pas d'OAuth),
+// accepté sur DEUX canaux (décision PO, FLAG 10) :
+//  - header `Authorization: Bearer <secret>` (tests, clients avec headers)
+//  - query `?key=<secret>` — canal ADDITIONNEL requis par l'UI des
+//    connecteurs Claude.ai, qui n'offre aucun champ bearer statique.
+// Comparaison à temps constant sur les deux canaux ; le secret n'est
+// jamais loggé par l'application.
+function safeEqual(candidate: string, secret: string): boolean {
+  const a = Buffer.from(candidate);
   const b = Buffer.from(secret);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return undefined;
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function verifyToken(req: Request, bearerToken?: string) {
+  const secret = process.env.MCP_SECRET;
+  if (!secret) return undefined;
+  const key = new URL(req.url).searchParams.get("key");
+  const ok =
+    (bearerToken != null && safeEqual(bearerToken, secret)) ||
+    (key != null && safeEqual(key, secret));
+  if (!ok) return undefined;
   return { token: "ok", clientId: "gym-buddy-owner", scopes: [] as string[] };
 }
 

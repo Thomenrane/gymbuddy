@@ -69,6 +69,8 @@ export async function logFreeMeal(input: {
   carbs_g?: number;
   fat_g?: number;
   notes?: string;
+  // true dès qu'un preset a servi de base, même modifié (décision PO FLAG 9)
+  is_estimate?: boolean;
 }): Promise<ActionResult> {
   const err = validDateSlot(input.date, input.slot);
   if (err) return bad(err);
@@ -88,6 +90,7 @@ export async function logFreeMeal(input: {
     carbs_g: roundMacro(Number(input.carbs_g) || 0),
     fat_g: roundMacro(Number(input.fat_g) || 0),
     notes: input.notes?.trim() || null,
+    is_estimate: Boolean(input.is_estimate),
   });
   if (error) return bad(`Log impossible : ${error.message}`);
 

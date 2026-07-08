@@ -29,13 +29,27 @@ export default async function ReglagesPage() {
         </p>
       </section>
 
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-muted">
+          Connecteur Claude (MCP)
+        </h2>
+        <div className="space-y-2 rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+          <p className="break-all font-medium">
+            https://gymbuddy-alpha.vercel.app/api/mcp
+          </p>
+          <p className="text-muted">
+            Claude.ai → Settings → Connectors → Add custom connector, avec le
+            bearer token <span className="font-medium">MCP_SECRET</span> (voir
+            docs/mcp-setup.md du repo). 14 tools : logs, séances, recettes,
+            résumés.
+          </p>
+        </div>
+      </section>
+
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-muted">À venir</h2>
         <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
           Gestion des templates de séances — Phase 3
-        </div>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
-          Connecteur MCP pour Claude — Phase 4
         </div>
       </section>
     </main>

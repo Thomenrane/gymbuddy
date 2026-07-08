@@ -1,0 +1,62 @@
+{
+  "_instructions_claude_code": {
+    "program_version": "v4 — validée PO le 2026-07-07. 3 full body, 5 exercices max par séance (contrainte dure : le PO n'a jamais le temps d'en faire 6).",
+    "prd_amendments": [
+      "AMENDEMENT 1 — workout_sets.sets : format jsonb flexible { reps?, weight_kg?, duration_s?, distance_m? } + champ measure_type sur exercises ('reps' | 'duration' | 'distance'). Tous les exos v4 sont en reps, mais le schéma doit supporter durée/distance pour le futur (running, gainage éventuel).",
+      "AMENDEMENT 2 — Baseline workouts : seeder 3 workouts baseline (1 par template, datés du jour du seed, notes='baseline seed — poids de départ') avec les current_weight_kg ci-dessous, pour que le pré-remplissage 'dernier poids' fonctionne dès la première vraie séance.",
+      "AMENDEMENT 3 — Conventions de poids : weight_kg négatif = assistance (tractions assistées -9 kg). Exercices haltères = poids PAR haltère (précisé dans le note de l'exo). Poids du corps = null. Sit-ups déclinés = poids du disque tenu.",
+      "AMENDEMENT 4 — template_exercises : ajouter target_rpe (int) et rest_seconds (int), affichés comme référence sur l'écran séance.",
+      "AMENDEMENT 5 — Progression (à afficher en hint sur l'écran séance, pas de logique automatique en v1) : double progression — atteindre le haut de la fourchette de reps sur toutes les séries avant d'ajouter du poids (+2,5 kg barre / -2 à -3 kg d'assistance aux tractions), puis repartir au bas de la fourchette."
+    ]
+  },
+  "exercises_catalog": [
+    { "name": "Back Squat", "muscle_group": "jambes", "measure_type": "reps" },
+    { "name": "Barbell Bench Press", "muscle_group": "pecs", "measure_type": "reps" },
+    { "name": "Pull-Ups", "muscle_group": "dos", "measure_type": "reps", "note": "poids négatif = assistance" },
+    { "name": "Chin-Ups", "muscle_group": "dos", "measure_type": "reps" },
+    { "name": "Dumbbell Lateral Raises", "muscle_group": "épaules", "measure_type": "reps", "note": "poids par haltère" },
+    { "name": "Sit-Ups déclinés lestés", "muscle_group": "core", "measure_type": "reps", "note": "poids du disque tenu" },
+    { "name": "Romanian Deadlift (haltères)", "muscle_group": "jambes", "measure_type": "reps", "note": "poids par haltère" },
+    { "name": "Tirage poulie basse", "muscle_group": "dos", "measure_type": "reps", "note": "machine Basic Fit" },
+    { "name": "Overhead Cable Triceps Extension", "muscle_group": "bras", "measure_type": "reps" },
+    { "name": "Standing Barbell Overhead Press", "muscle_group": "épaules", "measure_type": "reps" },
+    { "name": "Bulgarian Split Squats", "muscle_group": "jambes", "measure_type": "reps", "note": "par jambe" },
+    { "name": "Face Pull", "muscle_group": "épaules", "measure_type": "reps" },
+    { "name": "Press mollets", "muscle_group": "jambes", "measure_type": "reps", "note": "hors template — à ajouter à la volée si envie, superset possible avec lateral raises" }
+  ],
+  "workout_templates": [
+    {
+      "name": "Day 1 — Lourd (force)",
+      "type": "muscu",
+      "exercises": [
+        { "exercise": "Back Squat", "position": 1, "default_sets": 3, "default_reps": "4-6", "target_rpe": 8, "rest_seconds": 150, "current_weight_kg": 70 },
+        { "exercise": "Barbell Bench Press", "position": 2, "default_sets": 4, "default_reps": "4-6", "target_rpe": 8, "rest_seconds": 150, "current_weight_kg": 60 },
+        { "exercise": "Pull-Ups", "position": 3, "default_sets": 4, "default_reps": "6-8", "target_rpe": 8, "rest_seconds": 120, "current_weight_kg": -9 },
+        { "exercise": "Dumbbell Lateral Raises", "position": 4, "default_sets": 3, "default_reps": "12-15", "target_rpe": 8, "rest_seconds": 70, "current_weight_kg": 8 },
+        { "exercise": "Sit-Ups déclinés lestés", "position": 5, "default_sets": 3, "default_reps": "10-15", "target_rpe": 8, "rest_seconds": 75, "current_weight_kg": 10 }
+      ]
+    },
+    {
+      "name": "Day 2 — Volume (hypertrophie)",
+      "type": "muscu",
+      "exercises": [
+        { "exercise": "Romanian Deadlift (haltères)", "position": 1, "default_sets": 3, "default_reps": "6-8", "target_rpe": 8, "rest_seconds": 120, "current_weight_kg": 30 },
+        { "exercise": "Barbell Bench Press", "position": 2, "default_sets": 3, "default_reps": "8-10", "target_rpe": 8, "rest_seconds": 120, "current_weight_kg": 50, "note": "jour VOLUME — ~80-85% du bench lourd, nourrit le Day 1" },
+        { "exercise": "Tirage poulie basse", "position": 3, "default_sets": 4, "default_reps": "8-10", "target_rpe": 8, "rest_seconds": 90, "current_weight_kg": 52 },
+        { "exercise": "Overhead Cable Triceps Extension", "position": 4, "default_sets": 3, "default_reps": "10-12", "target_rpe": 8, "rest_seconds": 90, "current_weight_kg": 13 },
+        { "exercise": "Sit-Ups déclinés lestés", "position": 5, "default_sets": 3, "default_reps": "10-15", "target_rpe": 8, "rest_seconds": 75, "current_weight_kg": 10 }
+      ]
+    },
+    {
+      "name": "Day 3 — Épaules & Power",
+      "type": "muscu",
+      "exercises": [
+        { "exercise": "Back Squat", "position": 1, "default_sets": 4, "default_reps": "5-7", "target_rpe": 8, "rest_seconds": 150, "current_weight_kg": 70 },
+        { "exercise": "Standing Barbell Overhead Press", "position": 2, "default_sets": 4, "default_reps": "6-8", "target_rpe": 8, "rest_seconds": 120, "current_weight_kg": 35 },
+        { "exercise": "Chin-Ups", "position": 3, "default_sets": 4, "default_reps": "6-8", "target_rpe": 8, "rest_seconds": 120, "current_weight_kg": null, "note": "poids du corps" },
+        { "exercise": "Bulgarian Split Squats", "position": 4, "default_sets": 3, "default_reps": "8-10", "target_rpe": 8, "rest_seconds": 90, "current_weight_kg": null },
+        { "exercise": "Face Pull", "position": 5, "default_sets": 3, "default_reps": "12-15", "target_rpe": 8, "rest_seconds": 70, "current_weight_kg": 13.5 }
+      ]
+    }
+  ]
+}

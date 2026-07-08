@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gym Buddy
 
-## Getting Started
+PWA perso de suivi nutrition + training (recomposition corporelle). Spec :
+`PRD-app-recomp-v2.md` (hors repo) + amendements du programme v4.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router, `src/`), TypeScript, Tailwind 4 — mobile-first strict
+- Supabase (Postgres + Auth magic link), RLS single-user
+- Vercel (deploy auto via GitHub)
+- Phase 4 : serveur MCP sur `/api/mcp` (bearer `MCP_SECRET`)
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # remplir les valeurs
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Base de données
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Migrations : `supabase/migrations/` (appliquées via MCP Supabase ou CLI).
+- Seed : `seed/*.json` sont la **source de vérité** (ne pas modifier).
+  `node scripts/generate-seed-sql.mjs` régénère `supabase/seed.sql`
+  (idempotent), à appliquer sur la base.
+- Décisions de schéma (FLAG 5/6) documentées en tête de
+  `supabase/migrations/20260708000001_schema_v2.sql`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Vérification de phase
 
-## Learn More
+Chaque phase a son contrat mécanique : `scripts/verify-phaseN.sh`
+(exit 0 = Definition of Done atteinte). Phase 0 :
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+./scripts/verify-phase0.sh
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Nécessite `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+et un accès réseau sortant vers `*.supabase.co`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Phases
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Phase | Contenu | Statut |
+|---|---|---|
+| 0 | Fondations : schéma, seed, PWA, auth | ✅ |
+| 1 | Recettes (CRUD + dupliquer) | — |
+| 2 | Aujourd'hui (log ≤2 taps, pesée, streak) | — |
+| 3 | Training (templates, pré-remplissage charges) | — |
+| 4 | MCP (14 tools) | — |
+| 5 | Tendances | — |

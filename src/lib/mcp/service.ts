@@ -530,3 +530,197 @@ export async function logBodyMetric(input: {
   if (error) fail(error.message);
   return data;
 }
+
+// ============================================================
+// Phase 6 — Planificateur (5 tools additionnels)
+// La génération de semaine est une CONVERSATION Claude (plan_week) :
+// aucun solveur automatique dans l'app (non-goal explicite v2.1).
+// ============================================================
+import { aggregateShoppingList, shoppingListAsText } from "@/lib/shopping-list.mjs";
+import { alanCounts } from "@/lib/plan";
+
+const PLAN_RECIPE_COLS =
+  "id, code, name, kcal, protein_g, carbs_g, fat_g, tags, ingredients";
+
+type PlanRow = {
+  id: string;
+  plan_date: string;
+  slot: string;
+  portion_factor: number | string;
+  recipe: {
+    id: string; code: string | null; name: string; kcal: number;
+    protein_g: number; carbs_g: number; fat_g: number;
+    tags: string[] | null;
+    ingredients: { item: string; qty: number; unit: string }[];
+  } | null;
+};
+
+async function fetchPlanRows(start: string, end: string): Promise<PlanRow[]> {
+  const { data, error } = await mcpDb()
+    .from("meal_plan_entries")
+    .select(`id, plan_date, slot, portion_factor, recipe:recipes(${PLAN_RECIPE_COLS})`)
+    .gte("plan_date", start)
+    .lte("plan_date", end)
+    .order("plan_date");
+  if (error) fail(error.message);
+  return (data ?? []) as unknown as PlanRow[];
+}
+
+function planDays(rows: PlanRow[], targets: { kcal: number; protein_g: number; carbs_g: number; fat_g: number }) {
+  const byDay = new Map<string, PlanRow[]>();
+  for (const r of rows) byDay.set(r.plan_date, [...(byDay.get(r.plan_date) ?? []), r]);
+  return [...byDay.entries()].map(([date, entries]) => {
+    const totals = entries.reduce(
+      (a, e) => {
+        const f = Number(e.portion_factor) || 1;
+        return {
+          kcal: a.kcal + Math.round((e.recipe?.kcal ?? 0) * f),
+          protein_g: roundMacro(a.protein_g + Number(e.recipe?.protein_g ?? 0) * f),
+          carbs_g: roundMacro(a.carbs_g + Number(e.recipe?.carbs_g ?? 0) * f),
+          fat_g: roundMacro(a.fat_g + Number(e.recipe?.fat_g ?? 0) * f),
+        };
+      },
+      { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+    );
+    return {
+      date,
+      entries: entries.map((e) => ({
+        id: e.id,
+        slot: e.slot,
+        portion_factor: Number(e.portion_factor),
+        recipe_code: e.recipe?.code ?? null,
+        recipe_name: e.recipe?.name ?? null,
+      })),
+      totals,
+      delta_vs_targets: {
+        kcal: totals.kcal - targets.kcal,
+        protein_g: roundMacro(totals.protein_g - targets.protein_g),
+        carbs_g: roundMacro(totals.carbs_g - targets.carbs_g),
+        fat_g: roundMacro(totals.fat_g - targets.fat_g),
+      },
+      within_5pct_kcal: Math.abs(totals.kcal - targets.kcal) <= targets.kcal * 0.05,
+    };
+  });
+}
+
+export async function getPlan(startDate: string, endDate: string) {
+  const start = assertDate(startDate, "start_date");
+  const end = assertDate(endDate, "end_date");
+  const [rows, targets] = await Promise.all([fetchPlanRows(start, end), getTargets()]);
+  return {
+    start_date: start,
+    end_date: end,
+    targets,
+    days: planDays(rows, targets),
+    alan_counters: alanCounts(rows.map((r) => ({ tags: r.recipe?.tags ?? null }))),
+  };
+}
+
+async function resolveRecipeByCode(code: string): Promise<string> {
+  const { data, error } = await mcpDb()
+    .from("recipes")
+    .select("id")
+    .eq("code", code)
+    .maybeSingle();
+  if (error) fail(error.message);
+  if (!data) fail(`Recette introuvable pour le code "${code}" (utilise search_recipes).`);
+  return data.id;
+}
+
+export async function planMealMcp(input: {
+  date: string;
+  slot: string;
+  recipe_code: string;
+  portion_factor?: number;
+}) {
+  const date = assertDate(input.date);
+  if (!SLOTS.includes(input.slot)) fail(`slot invalide (${SLOTS.join("|")}).`);
+  const factor = input.portion_factor ?? 1;
+  if (!(factor > 0 && factor <= 10)) fail("portion_factor invalide.");
+  const recipeId = await resolveRecipeByCode(input.recipe_code);
+  const { data, error } = await mcpDb()
+    .from("meal_plan_entries")
+    .upsert(
+      { plan_date: date, slot: input.slot, recipe_id: recipeId, portion_factor: factor },
+      { onConflict: "plan_date,slot" }
+    )
+    .select(`id, plan_date, slot, portion_factor, recipe:recipes(code, name)`)
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+/**
+ * Écriture d'une semaine en LOT ATOMIQUE : toutes les validations
+ * (dates, slots, codes recettes, doublons date+slot) passent AVANT la
+ * moindre écriture ; l'upsert est un unique statement — tout ou rien.
+ */
+export async function planWeek(
+  entries: { date: string; slot: string; recipe_code: string; portion_factor?: number }[]
+) {
+  if (!entries?.length) fail("entries est vide.");
+  const seen = new Set<string>();
+  for (const e of entries) {
+    assertDate(e.date);
+    if (!SLOTS.includes(e.slot)) fail(`slot invalide : ${e.slot}`);
+    if (e.portion_factor != null && !(e.portion_factor > 0 && e.portion_factor <= 10))
+      fail(`portion_factor invalide pour ${e.date}/${e.slot}.`);
+    const key = `${e.date}|${e.slot}`;
+    if (seen.has(key)) fail(`Doublon dans le lot : ${e.date} / ${e.slot}.`);
+    seen.add(key);
+  }
+  // Résolution de TOUS les codes avant toute écriture (atomicité)
+  const codes = [...new Set(entries.map((e) => e.recipe_code))];
+  const { data: recipes, error } = await mcpDb()
+    .from("recipes")
+    .select("id, code")
+    .in("code", codes);
+  if (error) fail(error.message);
+  const byCode = new Map((recipes ?? []).map((r) => [r.code, r.id]));
+  const missing = codes.filter((c) => !byCode.has(c));
+  if (missing.length)
+    fail(`Codes recettes inconnus : ${missing.join(", ")} — rien n'a été écrit.`);
+
+  const rows = entries.map((e) => ({
+    plan_date: e.date,
+    slot: e.slot,
+    recipe_id: byCode.get(e.recipe_code)!,
+    portion_factor: e.portion_factor ?? 1,
+  }));
+  const { error: upErr } = await mcpDb()
+    .from("meal_plan_entries")
+    .upsert(rows, { onConflict: "plan_date,slot" });
+  if (upErr) fail(upErr.message);
+
+  const dates = entries.map((e) => e.date).sort();
+  return getPlan(dates[0], dates[dates.length - 1]);
+}
+
+export async function clearPlan(startDate: string, endDate: string, slot?: string) {
+  const start = assertDate(startDate, "start_date");
+  const end = assertDate(endDate, "end_date");
+  if (slot && !SLOTS.includes(slot)) fail("slot invalide.");
+  let q = mcpDb()
+    .from("meal_plan_entries")
+    .delete({ count: "exact" })
+    .gte("plan_date", start)
+    .lte("plan_date", end);
+  if (slot) q = q.eq("slot", slot);
+  const { error, count } = await q;
+  if (error) fail(error.message);
+  return { deleted: count ?? 0, start_date: start, end_date: end, slot: slot ?? null };
+}
+
+export async function getShoppingListMcp(startDate: string, endDate: string) {
+  const start = assertDate(startDate, "start_date");
+  const end = assertDate(endDate, "end_date");
+  const rows = await fetchPlanRows(start, end);
+  const items = aggregateShoppingList(rows);
+  return {
+    start_date: start,
+    end_date: end,
+    entries_count: rows.length,
+    items,
+    text: shoppingListAsText(items),
+  };
+}

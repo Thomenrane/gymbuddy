@@ -1,9 +1,21 @@
 import { SLOT_LABELS, type MealLog, type Slot } from "@/lib/today";
 import { MealLogRow } from "./meal-log-row";
 import { AddLogButton } from "./add-log";
+import { PlanSuggestion, type PlanSuggestionData } from "./plan-suggestion";
 
-export function SlotSection({ slot, logs }: { slot: Slot; logs: MealLog[] }) {
+export function SlotSection({
+  slot,
+  logs,
+  suggestion,
+}: {
+  slot: Slot;
+  logs: MealLog[];
+  suggestion?: PlanSuggestionData | null;
+}) {
   const kcal = logs.reduce((s, l) => s + l.kcal, 0);
+  // La suggestion du plan disparaît dès qu'un log existe sur le slot,
+  // même si c'est autre chose que le plat prévu (addendum PRD v2.1).
+  const showSuggestion = logs.length === 0 && suggestion;
 
   return (
     <section>
@@ -21,6 +33,11 @@ export function SlotSection({ slot, logs }: { slot: Slot; logs: MealLog[] }) {
             {logs.map((log) => (
               <MealLogRow key={log.id} log={log} />
             ))}
+          </div>
+        )}
+        {showSuggestion && (
+          <div className="p-2 pb-0">
+            <PlanSuggestion suggestion={suggestion} />
           </div>
         )}
         <div className={logs.length > 0 ? "border-t border-border p-2" : "p-2"}>

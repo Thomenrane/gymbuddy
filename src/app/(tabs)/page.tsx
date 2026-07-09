@@ -7,6 +7,8 @@ import {
   getStreak,
   getTargets,
 } from "@/lib/today-server";
+import { getDayPlan } from "@/lib/plan-server";
+import type { PlanSuggestionData } from "@/components/today/plan-suggestion";
 import { DayNav } from "@/components/today/day-nav";
 import { MacroSummary } from "@/components/today/macro-summary";
 import { SlotSection } from "@/components/today/slot-section";
@@ -24,15 +26,32 @@ export default async function AujourdhuiPage({
   const today = brusselsDay();
   const date = rawDate && isIsoDate(rawDate) && rawDate <= today ? rawDate : today;
 
-  const [targets, logs, metric, streak, recipes] = await Promise.all([
+  const [targets, logs, metric, streak, recipes, planned] = await Promise.all([
     getTargets(),
     getDayLogs(date),
     getBodyMetric(date),
     getStreak(today),
     getPickerRecipes(),
+    getDayPlan(date),
   ]);
 
   const totals = dayTotals(logs);
+  const suggestions = new Map<string, PlanSuggestionData>(
+    planned
+      .filter((e) => e.recipe)
+      .map((e) => {
+        const factor = Number(e.portion_factor) || 1;
+        return [
+          e.slot,
+          {
+            entryId: e.id,
+            recipeName: e.recipe!.name,
+            portionFactor: factor,
+            kcal: Math.round(e.recipe!.kcal * factor),
+          },
+        ];
+      })
+  );
   const picker: PickerItem[] = recipes.map((r) => ({
     id: r.id,
     name: r.name,
@@ -55,6 +74,7 @@ export default async function AujourdhuiPage({
               key={slot}
               slot={slot}
               logs={logs.filter((l) => l.slot === slot)}
+              suggestion={suggestions.get(slot)}
             />
           ))}
         </div>

@@ -221,6 +221,58 @@ const handler = createMcpHandler(
       { date: date.optional(), weight_kg: z.number().optional(), waist_cm: z.number().optional() },
       jsonTool((args) => svc.logBodyMetric(args))
     );
+
+    // ---------- Phase 6 : planificateur ----------
+    server.tool(
+      "get_plan",
+      "Plan de repas sur une période : entrées par jour, totaux macros/jour, deltas vs cibles (±5%), compteurs Alan de la période.",
+      { start_date: date, end_date: date },
+      jsonTool(({ start_date, end_date }) => svc.getPlan(start_date, end_date))
+    );
+
+    server.tool(
+      "plan_meal",
+      "Planifie UNE recette sur un jour+slot. Un seul plat par slot : re-planifier le même jour+slot REMPLACE l'entrée existante.",
+      {
+        date,
+        slot,
+        recipe_code: z.string(),
+        portion_factor: z.number().optional(),
+      },
+      jsonTool((args) => svc.planMealMcp(args))
+    );
+
+    server.tool(
+      "plan_week",
+      "Écrit un plan en LOT ATOMIQUE (tout ou rien) : si un recipe_code est inconnu ou le lot invalide, rien n'est écrit. Upsert par jour+slot (remplace). Renvoie le plan résultant avec totaux et compteurs Alan. C'est LE tool pour composer une semaine en conversation.",
+      {
+        entries: z
+          .array(
+            z.object({
+              date,
+              slot,
+              recipe_code: z.string(),
+              portion_factor: z.number().optional(),
+            })
+          )
+          .min(1),
+      },
+      jsonTool(({ entries }) => svc.planWeek(entries))
+    );
+
+    server.tool(
+      "clear_plan",
+      "Supprime les entrées de plan d'une période (optionnellement un seul slot).",
+      { start_date: date, end_date: date, slot: slot.optional() },
+      jsonTool(({ start_date, end_date, slot }) => svc.clearPlan(start_date, end_date, slot))
+    );
+
+    server.tool(
+      "get_shopping_list",
+      "Liste de courses agrégée du plan sur une période : quantités × portions sommées par (item, unité), sans conversion d'unités, groupées par rayon. Renvoie aussi la version texte copiable.",
+      { start_date: date, end_date: date },
+      jsonTool(({ start_date, end_date }) => svc.getShoppingListMcp(start_date, end_date))
+    );
   },
   {
     serverInfo: { name: "gym-buddy", version: "1.0.0" },

@@ -3,13 +3,13 @@
 # Contrat de fin de Phase 5 (Tendances) — exit != 0 si incomplet.
 # 1. tsc + next build verts
 # 2. scripts/phase5-tests.mjs : les modules de calcul de la page
-#    (src/lib/trends.mjs, src/lib/alan.mjs) exécutés sur des données de
-#    test insérées en base et relues comme l'app, comparés à des CALCULS
+#    (src/lib/trends.mjs, src/lib/oily-fish.mjs) exécutés sur des données
+#    de test insérées en base et relues comme l'app, comparés à des CALCULS
 #    DE RÉFÉRENCE refaits en dur :
 #    - moyenne hebdomadaire de poids (83.65 / 82.8)
 #    - progression de charge ordonnée par date (insertion en désordre)
 #    - moyennes kcal/protéines 7 jours (2100 / 150 sur 3 jours loggés)
-#    - compteurs de tags Alan de la semaine (jeu de logs connu)
+#    - compteur poisson gras de la semaine (jeu de logs connu)
 #    - séances par semaine par type
 #    Nettoyage complet vérifié (pesées/repas 1999, workouts 2126, __P5*).
 # 3. Les 6 visualisations du PRD §4 existent comme composants ET sont
@@ -47,10 +47,10 @@ declare -A VIZ=(
   ["WaistChart"]="src/components/trends/waist-chart.tsx"
   ["ProgressionChart"]="src/components/trends/progression-chart.tsx"
   ["AveragesPanel"]="src/components/trends/averages-panel.tsx"
-  ["AlanCounters"]="src/components/plan/alan-counters.tsx"
+  ["OilyFishCounter"]="src/components/trends/oily-fish-counter.tsx"
   ["SessionsChart"]="src/components/trends/sessions-chart.tsx"
 )
-for comp in WeightChart WaistChart ProgressionChart AveragesPanel AlanCounters SessionsChart; do
+for comp in WeightChart WaistChart ProgressionChart AveragesPanel OilyFishCounter SessionsChart; do
   file="${VIZ[$comp]}"
   if [ -s "$file" ] && grep -q "<$comp" "$PAGE"; then
     ok "$comp : composant présent et rendu par /tendances"

@@ -57,7 +57,7 @@ async function cleanup() {
 const R1 = {
   code: "ZPT1", name: "__PLAN_TEST_R1__", category: "dejeuner",
   kcal: 600, protein_g: 45, carbs_g: 60, fat_g: 18, source: "florian",
-  tags: ["poisson"],
+  tags: ["poisson", "poisson-gras"],
   ingredients: [
     { item: "Riz basmati test", qty: 80, unit: "g" },
     { item: "Œufs test", qty: 2, unit: "pièce" },
@@ -169,9 +169,8 @@ try {
     dayMon?.delta_vs_targets.kcal === 1350 - 2270 && dayMon?.within_5pct_kcal === false
   );
   check(
-    "plan_week : compteurs Alan (poisson=2, legumineuses=1)",
-    r.data.alan_counters?.find((c) => c.tag === "poisson")?.count === 2 &&
-      r.data.alan_counters?.find((c) => c.tag === "legumineuses")?.count === 1
+    "plan_week : oily_fish_count = 2 (ZPT1 poisson-gras planifié 2 fois)",
+    r.data.oily_fish_count === 2
   );
 
   // --- 4. get_plan : relit le même état ---

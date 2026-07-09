@@ -10,7 +10,7 @@ import {
   type WeekSessions,
   type WeeklyWeight,
 } from "@/lib/trends.mjs";
-import { alanCounts, type AlanCount } from "@/lib/alan.mjs";
+import { oilyFishCount } from "@/lib/oily-fish.mjs";
 
 const BASELINE_NOTE = "baseline seed — poids de départ";
 
@@ -52,8 +52,8 @@ export async function getMealAverages(): Promise<{ d7: PeriodAverages; d30: Peri
   };
 }
 
-/** Compteurs Alan de la semaine EN COURS (tags des recettes loggées). */
-export async function getAlanWeek(): Promise<{ week_start: string; counts: AlanCount[] }> {
+/** Repas au poisson gras de la semaine EN COURS (lot 8 : seule règle suivie). */
+export async function getOilyFishWeek(): Promise<{ week_start: string; count: number }> {
   const supabase = await createClient();
   const today = brusselsDay();
   const monday = mondayOf(today);
@@ -63,11 +63,11 @@ export async function getAlanWeek(): Promise<{ week_start: string; counts: AlanC
     .gte("log_date", monday)
     .lte("log_date", today)
     .not("recipe_id", "is", null);
-  if (error) throw new Error(`getAlanWeek: ${error.message}`);
+  if (error) throw new Error(`getOilyFishWeek: ${error.message}`);
   const recipes = (data ?? []).map((l) => ({
     tags: (l.recipe as unknown as { tags: string[] | null } | null)?.tags ?? null,
   }));
-  return { week_start: monday, counts: alanCounts(recipes) };
+  return { week_start: monday, count: oilyFishCount(recipes) };
 }
 
 export type ExerciseSeries = { id: string; name: string; points: ProgressionPoint[] };

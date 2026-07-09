@@ -93,9 +93,10 @@ try {
   const { tools } = await client.listTools();
   const names = tools.map((t) => t.name);
   const PLAN_TOOLS = ["get_plan", "plan_meal", "plan_week", "clear_plan", "get_shopping_list"];
+  // Inventaire total : 14 (phase 4) + 5 (plan) + 10 (lot 7) = 29.
   check(
     `5 tools plan exposés (total ${names.length})`,
-    PLAN_TOOLS.every((t) => names.includes(t)) && names.length === 19
+    PLAN_TOOLS.every((t) => names.includes(t)) && names.length === 29
   );
 
   // --- 1. plan_meal + upsert même jour+slot = REMPLACEMENT (FLAG 8) ---

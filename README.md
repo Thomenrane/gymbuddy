@@ -39,6 +39,20 @@ Chaque phase a son contrat mécanique : `scripts/verify-phaseN.sh`
 Nécessite `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 et un accès réseau sortant vers `*.supabase.co`.
 
+## Tests E2E (Playwright)
+
+Tests bout-en-bout dans un vrai navigateur (auth réelle via magic link
+admin → `/auth/confirm`, interactions tactiles). Chromium doit être
+disponible ; le harnais pointe sur `PLAYWRIGHT_BROWSERS_PATH`/chromium.
+
+```bash
+./scripts/run-e2e.sh                    # build + serveur local + scénarios
+./scripts/run-e2e.sh scripts/e2e/today.mjs
+```
+
+Nécessite `SUPABASE_SERVICE_ROLE_KEY` (seed/nettoyage + génération du
+magic link). Données de test en 1999, nettoyées à la fin.
+
 ## Phases
 
 | Phase | Contenu | Statut |

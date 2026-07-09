@@ -1,4 +1,6 @@
 // Types et constantes isomorphes de l'écran Aujourd'hui.
+import { shiftDay } from "@/lib/brussels-day.mjs";
+
 export type Slot = "petit_dej" | "dejeuner" | "collation" | "diner" | "extra";
 
 export const SLOT_ORDER: Slot[] = [
@@ -81,4 +83,24 @@ export function dayTotals(logs: MealLog[]) {
 /** Arrondi macro à 0,1 g près (évite les flottants moches en dénormalisation). */
 export function roundMacro(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/**
+ * Cibles de navigation jour, partagées par les chevrons (DayNav) ET le
+ * swipe (DaySwipe) — source unique de vérité (lot 10). Pas de futur
+ * au-delà d'aujourd'hui : next = null quand on est déjà à `today`.
+ */
+export function dayNavTargets(date: string, today: string): {
+  prev: string;
+  next: string | null;
+} {
+  return {
+    prev: shiftDay(date, -1),
+    next: date >= today ? null : shiftDay(date, 1),
+  };
+}
+
+/** Lien vers la fiche recette d'un log, ou null pour un log libre. */
+export function recipeHref(log: { recipe_id: string | null }): string | null {
+  return log.recipe_id ? `/recettes/${log.recipe_id}` : null;
 }

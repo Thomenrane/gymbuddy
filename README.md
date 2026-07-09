@@ -54,6 +54,21 @@ via `PLAYWRIGHT_BROWSERS_PATH`/chromium.
 Nécessite `SUPABASE_SERVICE_ROLE_KEY` (seed/nettoyage + génération du
 magic link). Données de test en 1999, nettoyées à la fin.
 
+## Recettes — contrôle des macros
+
+Avant d'ajouter/modifier une recette, recomposer ses macros depuis les
+ingrédients (table CIQUAL) pour attraper les estimations fausses :
+
+```bash
+node scripts/verify-recipe-macros.mjs recette.json   # ou stdin
+node scripts/verify-recipe-macros.mjs --all          # audit du livre (DB)
+node scripts/nutrition-check.test.mjs                # test du garde-fou
+```
+
+Verdicts : **ok** (≤10 %), **à corriger** (>10 %), **à vérifier** (ingrédient
+non référencé — l'ajouter à `scripts/lib/nutrition-ref.mjs`). Détail du
+protocole : `CLAUDE.md`.
+
 ## Phases
 
 | Phase | Contenu | Statut |

@@ -225,26 +225,47 @@ type RecipeInput = {
   tags?: string[];
 };
 
-export async function addRecipe(input: RecipeInput) {
+/** Vérifie qu'un code n'est pas déjà pris (lot 9). exceptId = recette éditée. */
+async function assertCodeAvailable(code: string, exceptId?: string) {
+  let q = mcpDb().from("recipes").select("id, name").eq("code", code);
+  if (exceptId) q = q.neq("id", exceptId);
+  const { data, error } = await q.maybeSingle();
+  if (error) fail(error.message);
+  if (data) fail(`Le code "${code}" est déjà attribué à une autre recette ("${data.name}").`);
+}
+
+export async function addRecipe(input: RecipeInput & { code?: string }) {
   if (!input.ingredients?.length) fail("ingredients est obligatoire (au moins 1).");
+  const { code, ...rest } = input;
+  const trimmedCode = code?.trim();
+  if (trimmedCode) await assertCodeAvailable(trimmedCode); // lot 9 : code optionnel, unique
   const { data, error } = await mcpDb()
     .from("recipes")
-    .insert({ ...input, source: "claude" })
+    .insert({ ...rest, ...(trimmedCode ? { code: trimmedCode } : {}), source: "claude" })
     .select()
     .single();
   if (error) fail(error.message);
   return data;
 }
 
-export async function updateRecipe(id: string, fields: Partial<RecipeInput> & { is_active?: boolean }) {
+export async function updateRecipe(
+  id: string,
+  fields: Partial<RecipeInput> & { is_active?: boolean; code?: string }
+) {
   const allowed = [
     "name", "category", "kcal", "protein_g", "carbs_g", "fat_g", "fiber_g",
-    "ingredients", "steps", "prep_min", "tags", "is_active",
+    "ingredients", "steps", "prep_min", "tags", "is_active", "code",
   ];
   const patch = Object.fromEntries(
     Object.entries(fields).filter(([k, v]) => allowed.includes(k) && v !== undefined)
   );
   if (Object.keys(patch).length === 0) fail("Aucun champ à modifier.");
+  if (typeof patch.code === "string") {
+    // lot 9 : attribuer/modifier le code d'une recette, unicité vérifiée
+    patch.code = patch.code.trim();
+    if (patch.code) await assertCodeAvailable(patch.code, id);
+    else patch.code = null as unknown as string; // "" → retire le code
+  }
   const { data, error } = await mcpDb()
     .from("recipes")
     .update(patch)
@@ -255,11 +276,43 @@ export async function updateRecipe(id: string, fields: Partial<RecipeInput> & { 
   return data;
 }
 
+// ---------- résolution de recette par code OU id (lot 9) ----------
+// add_recipe crée des recettes SANS code : le recipe_id devient donc un
+// identifiant de plein droit pour planifier/logguer. Au moins l'un des
+// deux requis ; si les deux fournis et incohérents → erreur métier.
+type RecipeRef = { recipe_code?: string; recipe_id?: string };
+
+async function resolveRecipeRef(
+  ref: RecipeRef,
+  cols = "id, code, kcal, protein_g, carbs_g, fat_g"
+) {
+  const db = mcpDb();
+  if (ref.recipe_id) {
+    const { data, error } = await db.from("recipes").select(cols).eq("id", ref.recipe_id).maybeSingle();
+    if (error) fail(error.message);
+    if (!data) fail(`Recette introuvable pour recipe_id "${ref.recipe_id}".`);
+    const row = data as unknown as { code: string | null };
+    if (ref.recipe_code && row.code !== ref.recipe_code)
+      fail(
+        `Incohérence : recipe_id "${ref.recipe_id}" porte le code "${row.code ?? "(aucun)"}", pas "${ref.recipe_code}".`
+      );
+    return data;
+  }
+  if (ref.recipe_code) {
+    const { data, error } = await db.from("recipes").select(cols).eq("code", ref.recipe_code).maybeSingle();
+    if (error) fail(error.message);
+    if (!data) fail(`Recette introuvable pour le code "${ref.recipe_code}" (utilise search_recipes).`);
+    return data;
+  }
+  fail("recipe_code ou recipe_id requis.");
+}
+
 // ---------- meal logs ----------
 export async function logMeal(input: {
   date?: string;
   slot: string;
   recipe_code?: string;
+  recipe_id?: string;
   portion_factor?: number;
   free_label?: string;
   macros?: { kcal: number; protein_g?: number; carbs_g?: number; fat_g?: number };
@@ -270,16 +323,12 @@ export async function logMeal(input: {
   if (!SLOTS.includes(input.slot)) fail(`slot invalide (${SLOTS.join("|")}).`);
   const db = mcpDb();
 
-  if (input.recipe_code) {
+  if (input.recipe_code || input.recipe_id) {
     const factor = input.portion_factor ?? 1;
     if (!(factor > 0 && factor <= 10)) fail("portion_factor invalide.");
-    const { data: recipe, error } = await db
-      .from("recipes")
-      .select("id, kcal, protein_g, carbs_g, fat_g")
-      .eq("code", input.recipe_code)
-      .maybeSingle();
-    if (error) fail(error.message);
-    if (!recipe) fail(`Recette introuvable pour le code "${input.recipe_code}" (utilise search_recipes).`);
+    const recipe = (await resolveRecipeRef(input)) as unknown as {
+      id: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number;
+    };
     const { data, error: insErr } = await db
       .from("meal_logs")
       .insert({
@@ -608,6 +657,7 @@ function planDays(rows: PlanRow[], targets: { kcal: number; protein_g: number; c
         id: e.id,
         slot: e.slot,
         portion_factor: Number(e.portion_factor),
+        recipe_id: e.recipe?.id ?? null,
         recipe_code: e.recipe?.code ?? null,
         recipe_name: e.recipe?.name ?? null,
       })),
@@ -636,35 +686,25 @@ export async function getPlan(startDate: string, endDate: string) {
   };
 }
 
-async function resolveRecipeByCode(code: string): Promise<string> {
-  const { data, error } = await mcpDb()
-    .from("recipes")
-    .select("id")
-    .eq("code", code)
-    .maybeSingle();
-  if (error) fail(error.message);
-  if (!data) fail(`Recette introuvable pour le code "${code}" (utilise search_recipes).`);
-  return data.id;
-}
-
 export async function planMealMcp(input: {
   date: string;
   slot: string;
-  recipe_code: string;
+  recipe_code?: string;
+  recipe_id?: string;
   portion_factor?: number;
 }) {
   const date = assertDate(input.date);
   if (!SLOTS.includes(input.slot)) fail(`slot invalide (${SLOTS.join("|")}).`);
   const factor = input.portion_factor ?? 1;
   if (!(factor > 0 && factor <= 10)) fail("portion_factor invalide.");
-  const recipeId = await resolveRecipeByCode(input.recipe_code);
+  const recipe = (await resolveRecipeRef(input, "id")) as unknown as { id: string };
   const { data, error } = await mcpDb()
     .from("meal_plan_entries")
     .upsert(
-      { plan_date: date, slot: input.slot, recipe_id: recipeId, portion_factor: factor },
+      { plan_date: date, slot: input.slot, recipe_id: recipe.id, portion_factor: factor },
       { onConflict: "plan_date,slot" }
     )
-    .select(`id, plan_date, slot, portion_factor, recipe:recipes(code, name)`)
+    .select(`id, plan_date, slot, portion_factor, recipe:recipes(id, code, name)`)
     .single();
   if (error) fail(error.message);
   return data;
@@ -672,39 +712,67 @@ export async function planMealMcp(input: {
 
 /**
  * Écriture d'une semaine en LOT ATOMIQUE : toutes les validations
- * (dates, slots, codes recettes, doublons date+slot) passent AVANT la
- * moindre écriture ; l'upsert est un unique statement — tout ou rien.
+ * (dates, slots, recettes par code OU id, doublons date+slot) passent
+ * AVANT la moindre écriture ; l'upsert est un unique statement — tout ou
+ * rien. Un recipe_id inconnu invalide le lot exactement comme un code.
  */
 export async function planWeek(
-  entries: { date: string; slot: string; recipe_code: string; portion_factor?: number }[]
+  entries: {
+    date: string;
+    slot: string;
+    recipe_code?: string;
+    recipe_id?: string;
+    portion_factor?: number;
+  }[]
 ) {
   if (!entries?.length) fail("entries est vide.");
   const seen = new Set<string>();
   for (const e of entries) {
     assertDate(e.date);
     if (!SLOTS.includes(e.slot)) fail(`slot invalide : ${e.slot}`);
+    if (!e.recipe_code && !e.recipe_id)
+      fail(`Entrée sans recipe_code ni recipe_id : ${e.date} / ${e.slot}.`);
     if (e.portion_factor != null && !(e.portion_factor > 0 && e.portion_factor <= 10))
       fail(`portion_factor invalide pour ${e.date}/${e.slot}.`);
     const key = `${e.date}|${e.slot}`;
     if (seen.has(key)) fail(`Doublon dans le lot : ${e.date} / ${e.slot}.`);
     seen.add(key);
   }
-  // Résolution de TOUS les codes avant toute écriture (atomicité)
-  const codes = [...new Set(entries.map((e) => e.recipe_code))];
-  const { data: recipes, error } = await mcpDb()
-    .from("recipes")
-    .select("id, code")
-    .in("code", codes);
-  if (error) fail(error.message);
-  const byCode = new Map((recipes ?? []).map((r) => [r.code, r.id]));
-  const missing = codes.filter((c) => !byCode.has(c));
-  if (missing.length)
-    fail(`Codes recettes inconnus : ${missing.join(", ")} — rien n'a été écrit.`);
+  // Résolution de TOUTES les références (code et/ou id) avant écriture.
+  const codes = [...new Set(entries.filter((e) => !e.recipe_id && e.recipe_code).map((e) => e.recipe_code!))];
+  const ids = [...new Set(entries.map((e) => e.recipe_id).filter((v): v is string => Boolean(v)))];
+  const db = mcpDb();
+  const [byCodeRes, byIdRes] = await Promise.all([
+    codes.length ? db.from("recipes").select("id, code").in("code", codes) : Promise.resolve({ data: [], error: null }),
+    ids.length ? db.from("recipes").select("id, code").in("id", ids) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (byCodeRes.error) fail(byCodeRes.error.message);
+  if (byIdRes.error) fail(byIdRes.error.message);
+  const byCode = new Map((byCodeRes.data ?? []).map((r) => [r.code, r]));
+  const byId = new Map((byIdRes.data ?? []).map((r) => [r.id, r]));
 
-  const rows = entries.map((e) => ({
+  const missing: string[] = [];
+  const resolvedIds = entries.map((e) => {
+    if (e.recipe_id) {
+      const row = byId.get(e.recipe_id);
+      if (!row) { missing.push(`id:${e.recipe_id}`); return null; }
+      if (e.recipe_code && row.code !== e.recipe_code)
+        fail(
+          `Incohérence pour ${e.date}/${e.slot} : recipe_id porte le code "${row.code ?? "(aucun)"}", pas "${e.recipe_code}".`
+        );
+      return row.id;
+    }
+    const row = byCode.get(e.recipe_code!);
+    if (!row) { missing.push(`code:${e.recipe_code}`); return null; }
+    return row.id;
+  });
+  if (missing.length)
+    fail(`Recettes inconnues : ${[...new Set(missing)].join(", ")} — rien n'a été écrit.`);
+
+  const rows = entries.map((e, i) => ({
     plan_date: e.date,
     slot: e.slot,
-    recipe_id: byCode.get(e.recipe_code)!,
+    recipe_id: resolvedIds[i]!,
     portion_factor: e.portion_factor ?? 1,
   }));
   const { error: upErr } = await mcpDb()

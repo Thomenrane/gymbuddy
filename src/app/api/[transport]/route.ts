@@ -82,10 +82,11 @@ const handler = createMcpHandler(
 
     server.tool(
       "add_recipe",
-      "Ajoute une recette (source='claude'). Ingrédients quantifiés obligatoires.",
+      "Ajoute une recette (source='claude'). Ingrédients quantifiés obligatoires. code optionnel (erreur s'il est déjà pris) — non requis : la recette reste planifiable/loggable par recipe_id.",
       {
         name: z.string(),
         category,
+        code: z.string().optional().describe("Code lisible optionnel (ex. L8) — unique"),
         kcal: z.number(),
         protein_g: z.number(),
         carbs_g: z.number(),
@@ -101,10 +102,11 @@ const handler = createMcpHandler(
 
     server.tool(
       "update_recipe",
-      "Modifie une recette existante (champs partiels). Ne réécrit jamais les logs passés.",
+      "Modifie une recette existante (champs partiels). Ne réécrit jamais les logs passés. code optionnel : attribue/modifie le code (unique ; \"\" le retire).",
       {
         id: z.string().describe("uuid de la recette"),
         name: z.string().optional(),
+        code: z.string().optional().describe("Attribue/modifie le code lisible (unique)"),
         category: category.optional(),
         kcal: z.number().optional(),
         protein_g: z.number().optional(),
@@ -122,11 +124,12 @@ const handler = createMcpHandler(
 
     server.tool(
       "log_meal",
-      "Logge un repas : recipe_code (macros = recette × portion, figées) OU free_label + macros manuelles (kcal obligatoire). date par défaut : aujourd'hui (Bruxelles).",
+      "Logge un repas : recipe_code OU recipe_id (macros = recette × portion, figées) OU free_label + macros manuelles (kcal obligatoire). date par défaut : aujourd'hui (Bruxelles).",
       {
         date: date.optional(),
         slot,
         recipe_code: z.string().optional(),
+        recipe_id: z.string().optional().describe("uuid de recette (alternative au code, ex. recettes sans code)"),
         portion_factor: z.number().optional(),
         free_label: z.string().optional(),
         macros: z
@@ -232,11 +235,12 @@ const handler = createMcpHandler(
 
     server.tool(
       "plan_meal",
-      "Planifie UNE recette sur un jour+slot. Un seul plat par slot : re-planifier le même jour+slot REMPLACE l'entrée existante.",
+      "Planifie UNE recette sur un jour+slot, par recipe_code OU recipe_id (au moins l'un). Un seul plat par slot : re-planifier le même jour+slot REMPLACE l'entrée existante.",
       {
         date,
         slot,
-        recipe_code: z.string(),
+        recipe_code: z.string().optional(),
+        recipe_id: z.string().optional().describe("uuid de recette (alternative au code)"),
         portion_factor: z.number().optional(),
       },
       jsonTool((args) => svc.planMealMcp(args))
@@ -244,14 +248,15 @@ const handler = createMcpHandler(
 
     server.tool(
       "plan_week",
-      "Écrit un plan en LOT ATOMIQUE (tout ou rien) : si un recipe_code est inconnu ou le lot invalide, rien n'est écrit. Upsert par jour+slot (remplace). Renvoie le plan résultant avec totaux et oily_fish_count. C'est LE tool pour composer une semaine en conversation.",
+      "Écrit un plan en LOT ATOMIQUE (tout ou rien) : chaque entrée référence une recette par recipe_code OU recipe_id (au moins l'un). Si une référence est inconnue ou le lot invalide, rien n'est écrit. Upsert par jour+slot (remplace). Renvoie le plan résultant avec totaux et oily_fish_count. C'est LE tool pour composer une semaine en conversation.",
       {
         entries: z
           .array(
             z.object({
               date,
               slot,
-              recipe_code: z.string(),
+              recipe_code: z.string().optional(),
+              recipe_id: z.string().optional().describe("uuid de recette (alternative au code)"),
               portion_factor: z.number().optional(),
             })
           )

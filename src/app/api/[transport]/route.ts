@@ -273,6 +273,128 @@ const handler = createMcpHandler(
       { start_date: date, end_date: date },
       jsonTool(({ start_date, end_date }) => svc.getShoppingListMcp(start_date, end_date))
     );
+
+    // ---------- Lot 7 : couverture complète ----------
+    const templateExercise = z.object({
+      name: z.string().describe("Nom d'exercice (matché/créé dans le catalogue)"),
+      sets: z.number().optional(),
+      reps_min: z.number().optional(),
+      reps_max: z.number().optional(),
+      target_rpe: z.number().optional(),
+      rest_seconds: z.number().optional(),
+      note: z
+        .string()
+        .optional()
+        .describe("Note catalogue (convention de poids), appliquée si l'exo est créé"),
+    });
+    const workoutExercises = z
+      .array(
+        z.object({
+          name: z.string(),
+          sets: z.array(
+            z.object({
+              reps: z.number().optional(),
+              weight_kg: z.number().nullable().optional(),
+              duration_s: z.number().optional(),
+              distance_m: z.number().optional(),
+            })
+          ),
+        })
+      )
+      .min(1);
+
+    server.tool(
+      "list_workout_templates",
+      "Templates de séances avec leurs exercices (fourchette reps, RPE, repos). Les templates archivés sont exclus sauf include_archived=true.",
+      { include_archived: z.boolean().optional() },
+      jsonTool(({ include_archived }) => svc.listWorkoutTemplates(include_archived ?? false))
+    );
+
+    server.tool(
+      "create_workout_template",
+      "Crée un template de séance : exercices ordonnés (l'ordre du tableau = position), matchés/créés dans le catalogue.",
+      {
+        name: z.string(),
+        type: z.enum(["muscu", "running", "padel", "autre"]).optional(),
+        exercises: z.array(templateExercise).min(1),
+      },
+      jsonTool((args) => svc.createWorkoutTemplate(args))
+    );
+
+    server.tool(
+      "update_workout_template",
+      "Modifie un template : nom, type, archivage (is_active=false), et/ou REMPLACEMENT COMPLET de la liste d'exercices. Ne réécrit jamais les séances passées.",
+      {
+        id: z.string(),
+        name: z.string().optional(),
+        type: z.enum(["muscu", "running", "padel", "autre"]).optional(),
+        is_active: z.boolean().optional(),
+        exercises: z.array(templateExercise).min(1).optional(),
+      },
+      jsonTool((args) => svc.updateWorkoutTemplate(args))
+    );
+
+    server.tool(
+      "create_exercise",
+      "Ajoute un exercice au catalogue (erreur s'il existe déjà, insensible à la casse).",
+      {
+        name: z.string(),
+        muscle_group: z.string().optional(),
+        measure_type: z.enum(["reps", "duration", "distance"]).optional(),
+        note: z.string().optional().describe("Convention de poids (par haltère, assistance…)"),
+      },
+      jsonTool((args) => svc.createExercise(args))
+    );
+
+    server.tool(
+      "update_exercise",
+      "Modifie un exercice du catalogue (renommer conserve tout l'historique des séries).",
+      {
+        id: z.string(),
+        name: z.string().optional(),
+        muscle_group: z.string().optional(),
+        measure_type: z.enum(["reps", "duration", "distance"]).optional(),
+        note: z.string().optional(),
+      },
+      jsonTool(({ id, ...fields }) => svc.updateExercise(id, fields))
+    );
+
+    server.tool(
+      "update_workout",
+      "Modifie une séance : champs simples et/ou REMPLACEMENT COMPLET des séries (exercises). Les baselines seedés sont protégés.",
+      {
+        id: z.string(),
+        date: date.optional(),
+        duration_min: z.number().optional(),
+        distance_km: z.number().optional(),
+        run_type: z.enum(["normal", "intervalles", "fractionné", "long", "récup"]).optional(),
+        perceived_intensity: z.number().min(1).max(10).optional(),
+        notes: z.string().optional(),
+        exercises: workoutExercises.optional(),
+      },
+      jsonTool((args) => svc.updateWorkout(args))
+    );
+
+    server.tool(
+      "delete_workout",
+      "Supprime une séance et ses séries. Refuse les baselines seedés (poids de départ).",
+      { id: z.string() },
+      jsonTool(({ id }) => svc.deleteWorkout(id))
+    );
+
+    server.tool(
+      "get_body_metrics",
+      "Pesées et tours de taille bruts sur une période.",
+      { start_date: date, end_date: date },
+      jsonTool(({ start_date, end_date }) => svc.getBodyMetrics(start_date, end_date))
+    );
+
+    server.tool(
+      "delete_body_metric",
+      "Supprime la pesée d'une date (erreur si aucune pesée ce jour-là).",
+      { date },
+      jsonTool(({ date }) => svc.deleteBodyMetric(date))
+    );
   },
   {
     serverInfo: { name: "gym-buddy", version: "1.0.0" },

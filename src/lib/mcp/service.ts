@@ -363,6 +363,58 @@ export async function deleteMealLog(id: string) {
 }
 
 // ---------- workouts ----------
+type WorkoutExerciseInput = {
+  name: string;
+  sets: { reps?: number; weight_kg?: number | null; duration_s?: number; distance_m?: number }[];
+};
+
+/**
+ * Match par nom exact (insensible à la casse), création à la volée sinon.
+ * `note` (convention de poids, AMENDEMENT 3) n'est appliquée qu'à la
+ * création — jamais écrasée sur un exercice existant.
+ */
+async function matchOrCreateExercise(
+  name: string,
+  note?: string
+): Promise<{ id: string; created: boolean }> {
+  const db = mcpDb();
+  const { data: found } = await db
+    .from("exercises")
+    .select("id")
+    .ilike("name", name)
+    .maybeSingle();
+  if (found) return { id: found.id, created: false };
+  const { data: created, error } = await db
+    .from("exercises")
+    .insert({ name, measure_type: "reps", note: note ?? null })
+    .select("id")
+    .single();
+  if (error) fail(error.message);
+  return { id: created.id, created: true };
+}
+
+async function buildSetRows(workoutId: string, exercises: WorkoutExerciseInput[]) {
+  const created: string[] = [];
+  const rows: object[] = [];
+  for (const [pos, ex] of exercises.entries()) {
+    const match = await matchOrCreateExercise(ex.name);
+    if (match.created) created.push(ex.name);
+    ex.sets.forEach((s, i) =>
+      rows.push({
+        workout_id: workoutId,
+        exercise_id: match.id,
+        position: pos + 1,
+        set_number: i + 1,
+        reps: s.reps ?? null,
+        weight_kg: s.weight_kg ?? null,
+        duration_s: s.duration_s ?? null,
+        distance_m: s.distance_m ?? null,
+      })
+    );
+  }
+  return { rows, created };
+}
+
 export async function logWorkout(input: {
   date?: string;
   type: string;
@@ -404,39 +456,10 @@ export async function logWorkout(input: {
     .single();
   if (error) fail(error.message);
 
-  const createdExercises: string[] = [];
-  const sets: object[] = [];
-  for (const [pos, ex] of (input.exercises ?? []).entries()) {
-    // Match par nom exact (insensible à la casse), création à la volée sinon
-    const { data: found } = await db
-      .from("exercises")
-      .select("id")
-      .ilike("name", ex.name)
-      .maybeSingle();
-    let exId = found?.id;
-    if (!exId) {
-      const { data: created, error: cErr } = await db
-        .from("exercises")
-        .insert({ name: ex.name, measure_type: "reps" })
-        .select("id")
-        .single();
-      if (cErr) fail(cErr.message);
-      exId = created.id;
-      createdExercises.push(ex.name);
-    }
-    ex.sets.forEach((s, i) =>
-      sets.push({
-        workout_id: workout.id,
-        exercise_id: exId,
-        position: pos + 1,
-        set_number: i + 1,
-        reps: s.reps ?? null,
-        weight_kg: s.weight_kg ?? null,
-        duration_s: s.duration_s ?? null,
-        distance_m: s.distance_m ?? null,
-      })
-    );
-  }
+  const { rows: sets, created: createdExercises } = await buildSetRows(
+    workout.id,
+    input.exercises ?? []
+  );
   if (sets.length) {
     const { error: sErr } = await db.from("workout_sets").insert(sets);
     if (sErr) fail(sErr.message);
@@ -723,4 +746,278 @@ export async function getShoppingListMcp(startDate: string, endDate: string) {
     items,
     text: shoppingListAsText(items),
   };
+}
+
+// ============================================================
+// Lot 7 — couverture MCP complète (templates, exercices,
+// workouts, mesures). Règle intangible : modifier un template ne
+// réécrit JAMAIS un workout passé (les sets référencent les
+// exercices directement, pas le template).
+// ============================================================
+
+type TemplateExerciseInput = {
+  name: string;
+  sets?: number;
+  reps_min?: number;
+  reps_max?: number;
+  target_rpe?: number;
+  rest_seconds?: number;
+  /** Note CATALOGUE (convention de poids) — appliquée seulement si l'exo est créé. */
+  note?: string;
+};
+
+const TEMPLATE_COLS = `id, name, type, is_active, created_at,
+  template_exercises(position, default_sets, default_reps_min, default_reps_max,
+    target_rpe, rest_seconds, exercise:exercises(id, name, note))`;
+
+async function fetchTemplate(id: string) {
+  const { data, error } = await mcpDb()
+    .from("workout_templates")
+    .select(TEMPLATE_COLS)
+    .eq("id", id)
+    .order("position", { referencedTable: "template_exercises" })
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+async function replaceTemplateExercises(
+  templateId: string,
+  exercises: TemplateExerciseInput[]
+) {
+  if (!exercises.length) fail("exercises est vide (au moins 1 exercice).");
+  const db = mcpDb();
+  const created: string[] = [];
+  const rows: object[] = [];
+  for (const [pos, ex] of exercises.entries()) {
+    const match = await matchOrCreateExercise(ex.name, ex.note);
+    if (match.created) created.push(ex.name);
+    rows.push({
+      template_id: templateId,
+      exercise_id: match.id,
+      position: pos + 1,
+      default_sets: ex.sets ?? null,
+      default_reps_min: ex.reps_min ?? null,
+      default_reps_max: ex.reps_max ?? null,
+      target_rpe: ex.target_rpe ?? null,
+      rest_seconds: ex.rest_seconds ?? null,
+    });
+  }
+  // Remplacement COMPLET de la liste (l'ordre du tableau = position)
+  const { error: delErr } = await db
+    .from("template_exercises")
+    .delete()
+    .eq("template_id", templateId);
+  if (delErr) fail(delErr.message);
+  const { error: insErr } = await db.from("template_exercises").insert(rows);
+  if (insErr) fail(insErr.message);
+  return created;
+}
+
+export async function listWorkoutTemplates(includeArchived = false) {
+  let q = mcpDb()
+    .from("workout_templates")
+    .select(TEMPLATE_COLS)
+    .order("name")
+    .order("position", { referencedTable: "template_exercises" });
+  if (!includeArchived) q = q.eq("is_active", true);
+  const { data, error } = await q;
+  if (error) fail(error.message);
+  return { count: (data ?? []).length, templates: data ?? [] };
+}
+
+export async function createWorkoutTemplate(input: {
+  name: string;
+  type?: string;
+  exercises: TemplateExerciseInput[];
+}) {
+  const type = input.type ?? "muscu";
+  if (!WORKOUT_TYPES.includes(type)) fail(`type invalide (${WORKOUT_TYPES.join("|")}).`);
+  if (!input.name?.trim()) fail("name est obligatoire.");
+  const { data: tpl, error } = await mcpDb()
+    .from("workout_templates")
+    .insert({ name: input.name.trim(), type })
+    .select("id")
+    .single();
+  if (error) fail(error.message);
+  const created = await replaceTemplateExercises(tpl.id, input.exercises);
+  return { template: await fetchTemplate(tpl.id), exercises_created: created };
+}
+
+export async function updateWorkoutTemplate(input: {
+  id: string;
+  name?: string;
+  type?: string;
+  is_active?: boolean;
+  exercises?: TemplateExerciseInput[];
+}) {
+  const db = mcpDb();
+  const patch: Record<string, unknown> = {};
+  if (input.name !== undefined) patch.name = input.name.trim();
+  if (input.type !== undefined) {
+    if (!WORKOUT_TYPES.includes(input.type)) fail(`type invalide (${WORKOUT_TYPES.join("|")}).`);
+    patch.type = input.type;
+  }
+  if (input.is_active !== undefined) patch.is_active = input.is_active;
+  if (Object.keys(patch).length === 0 && input.exercises === undefined)
+    fail("Aucun champ à modifier.");
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await db.from("workout_templates").update(patch).eq("id", input.id);
+    if (error) fail(error.message);
+  }
+  let created: string[] = [];
+  if (input.exercises !== undefined) {
+    created = await replaceTemplateExercises(input.id, input.exercises);
+  }
+  return { template: await fetchTemplate(input.id), exercises_created: created };
+}
+
+export async function createExercise(input: {
+  name: string;
+  muscle_group?: string;
+  measure_type?: string;
+  note?: string;
+}) {
+  if (!input.name?.trim()) fail("name est obligatoire.");
+  const db = mcpDb();
+  const { data: existing } = await db
+    .from("exercises")
+    .select("id, name")
+    .ilike("name", input.name.trim())
+    .maybeSingle();
+  if (existing) fail(`L'exercice "${existing.name}" existe déjà (utilise update_exercise).`);
+  const { data, error } = await db
+    .from("exercises")
+    .insert({
+      name: input.name.trim(),
+      muscle_group: input.muscle_group ?? null,
+      measure_type: input.measure_type ?? "reps",
+      note: input.note ?? null,
+    })
+    .select()
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+export async function updateExercise(
+  id: string,
+  fields: { name?: string; muscle_group?: string; measure_type?: string; note?: string }
+) {
+  const patch = Object.fromEntries(
+    Object.entries(fields).filter(
+      ([k, v]) => ["name", "muscle_group", "measure_type", "note"].includes(k) && v !== undefined
+    )
+  );
+  if (Object.keys(patch).length === 0) fail("Aucun champ à modifier.");
+  // Renommer conserve tout l'historique : les sets référencent l'id.
+  const { data, error } = await mcpDb()
+    .from("exercises")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+/** Charge un workout et refuse d'y toucher si c'est un baseline seedé. */
+async function loadMutableWorkout(id: string) {
+  const { data, error } = await mcpDb()
+    .from("workouts")
+    .select("id, notes")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) fail(error.message);
+  if (!data) fail(`Séance introuvable : ${id}.`);
+  if (data.notes === BASELINE_NOTE)
+    fail(
+      "Séance baseline protégée (poids de départ du seed) — ni modifiable ni supprimable."
+    );
+  return data;
+}
+
+export async function updateWorkout(input: {
+  id: string;
+  date?: string;
+  duration_min?: number;
+  distance_km?: number;
+  run_type?: string;
+  perceived_intensity?: number;
+  notes?: string;
+  exercises?: WorkoutExerciseInput[];
+}) {
+  await loadMutableWorkout(input.id);
+  const db = mcpDb();
+  const patch: Record<string, unknown> = {};
+  if (input.date !== undefined) patch.workout_date = assertDate(input.date);
+  if (input.duration_min !== undefined) patch.duration_min = input.duration_min;
+  if (input.distance_km !== undefined) patch.distance_km = input.distance_km;
+  if (input.run_type !== undefined) patch.run_type = input.run_type;
+  if (input.perceived_intensity !== undefined)
+    patch.perceived_intensity = input.perceived_intensity;
+  if (input.notes !== undefined) patch.notes = input.notes;
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await db.from("workouts").update(patch).eq("id", input.id);
+    if (error) fail(error.message);
+  }
+
+  let setsCreated = 0;
+  let created: string[] = [];
+  if (input.exercises !== undefined) {
+    // Remplacement complet des séries de CETTE séance uniquement
+    const { error: delErr } = await db
+      .from("workout_sets")
+      .delete()
+      .eq("workout_id", input.id);
+    if (delErr) fail(delErr.message);
+    const built = await buildSetRows(input.id, input.exercises);
+    created = built.created;
+    if (built.rows.length) {
+      const { error: insErr } = await db.from("workout_sets").insert(built.rows);
+      if (insErr) fail(insErr.message);
+    }
+    setsCreated = built.rows.length;
+  }
+
+  const { data: workout, error: wErr } = await db
+    .from("workouts")
+    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, exercise:exercises(name))")
+    .eq("id", input.id)
+    .single();
+  if (wErr) fail(wErr.message);
+  return { workout, sets_replaced: input.exercises !== undefined, sets_created: setsCreated, exercises_created: created };
+}
+
+export async function deleteWorkout(id: string) {
+  await loadMutableWorkout(id);
+  const { error } = await mcpDb().from("workouts").delete().eq("id", id);
+  if (error) fail(error.message);
+  return { deleted: true, id };
+}
+
+export async function getBodyMetrics(startDate: string, endDate: string) {
+  const start = assertDate(startDate, "start_date");
+  const end = assertDate(endDate, "end_date");
+  const { data, error } = await mcpDb()
+    .from("body_metrics")
+    .select("*")
+    .gte("metric_date", start)
+    .lte("metric_date", end)
+    .order("metric_date");
+  if (error) fail(error.message);
+  return { count: (data ?? []).length, metrics: data ?? [] };
+}
+
+export async function deleteBodyMetric(date: string) {
+  const d = assertDate(date);
+  const { error, count } = await mcpDb()
+    .from("body_metrics")
+    .delete({ count: "exact" })
+    .eq("metric_date", d);
+  if (error) fail(error.message);
+  if (!count) fail(`Aucune pesée au ${d}.`);
+  return { deleted: true, date: d };
 }

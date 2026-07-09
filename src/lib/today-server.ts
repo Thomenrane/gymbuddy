@@ -73,13 +73,24 @@ export async function getStreak(today: string): Promise<number> {
   return streak;
 }
 
-export type PickerRecipe = Recipe & { lastLoggedAt: string | null };
+// Le picker n'affiche que ces champs : on évite de tirer ingredients/steps
+// (jsonb volumineux) des 32 recettes à chaque affichage (chemin chaud).
+const PICKER_COLS = "id, name, category, kcal, protein_g, prep_min";
+export type PickerRecipe = {
+  id: string;
+  name: string;
+  category: Recipe["category"];
+  kcal: number;
+  protein_g: number;
+  prep_min: number | null;
+  lastLoggedAt: string | null;
+};
 
 /** Recettes actives pour le picker, avec date de dernier log (récents en premier). */
 export async function getPickerRecipes(): Promise<PickerRecipe[]> {
   const supabase = await createClient();
   const [{ data: recipes, error }, { data: recents }] = await Promise.all([
-    supabase.from("recipes").select("*").eq("is_active", true).order("name"),
+    supabase.from("recipes").select(PICKER_COLS).eq("is_active", true).order("name"),
     supabase
       .from("meal_logs")
       .select("recipe_id, created_at")
@@ -94,7 +105,7 @@ export async function getPickerRecipes(): Promise<PickerRecipe[]> {
     if (r.recipe_id && !lastLogged.has(r.recipe_id))
       lastLogged.set(r.recipe_id, r.created_at);
   }
-  return ((recipes ?? []) as Recipe[]).map((r) => ({
+  return ((recipes ?? []) as Omit<PickerRecipe, "lastLoggedAt">[]).map((r) => ({
     ...r,
     lastLoggedAt: lastLogged.get(r.id) ?? null,
   }));

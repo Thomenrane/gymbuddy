@@ -25,3 +25,9 @@ export function shiftDay(isoDate, delta) {
 export function isIsoDate(s) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
 }
+
+/** Lundi de la semaine contenant la date (la "semaine" du planificateur). */
+export function mondayOf(isoDate) {
+  const dow = new Date(`${isoDate}T12:00:00Z`).getUTCDay(); // 0 = dimanche
+  return shiftDay(isoDate, dow === 0 ? -6 : 1 - dow);
+}

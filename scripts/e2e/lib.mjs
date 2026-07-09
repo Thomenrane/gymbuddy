@@ -3,7 +3,7 @@
 // - auth RÉELLE du navigateur : magic link généré côté admin puis
 //   /auth/confirm pose les cookies (le vrai flux de l'app)
 // - petit assert + emulation de swipe tactile
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 import { createClient } from "@supabase/supabase-js";
 
 export const CHROMIUM = "/opt/pw-browsers/chromium";

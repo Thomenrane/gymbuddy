@@ -42,8 +42,9 @@ et un accès réseau sortant vers `*.supabase.co`.
 ## Tests E2E (Playwright)
 
 Tests bout-en-bout dans un vrai navigateur (auth réelle via magic link
-admin → `/auth/confirm`, interactions tactiles). Chromium doit être
-disponible ; le harnais pointe sur `PLAYWRIGHT_BROWSERS_PATH`/chromium.
+admin → `/auth/confirm`, interactions tactiles). Utilise `playwright-core`
+(aucun téléchargement de navigateur) et pilote le Chromium déjà présent
+via `PLAYWRIGHT_BROWSERS_PATH`/chromium.
 
 ```bash
 ./scripts/run-e2e.sh                    # build + serveur local + scénarios

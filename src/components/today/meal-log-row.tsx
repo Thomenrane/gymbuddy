@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { NotePencil } from "@phosphor-icons/react";
+import Link from "next/link";
+import { ArrowSquareOut, NotePencil } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
 import { deleteMealLog, updateMealLog } from "@/app/(tabs)/today-actions";
 import {
   PORTION_FACTORS,
   SLOT_LABELS,
   SLOT_ORDER,
+  recipeHref,
   roundMacro,
   type MealLog,
   type Slot,
@@ -25,6 +27,7 @@ export function MealLogRow({ log }: { log: MealLog }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-recipe-id={log.recipe_id ?? undefined}
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left active:bg-surface-raised"
       >
         <span className="min-w-0">
@@ -118,9 +121,20 @@ function EditLogSheet({ log, onClose }: { log: MealLog; onClose: () => void }) {
     });
   }
 
+  const href = recipeHref(log);
+
   return (
     <Sheet open onClose={onClose} title={log.recipe?.name ?? log.free_label ?? "Log"}>
       <div className="space-y-3">
+        {href && (
+          <Link
+            href={href}
+            className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2.5 text-sm font-medium active:bg-surface-raised"
+          >
+            <span>Voir la recette</span>
+            <ArrowSquareOut size={16} aria-hidden className="text-muted" />
+          </Link>
+        )}
         <div>
           <span className="mb-1 block text-sm text-muted">Slot</span>
           <div className="flex flex-wrap gap-1.5">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Barbell, CaretRight } from "@phosphor-icons/react";
+import { Scales, CaretRight } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
 import { upsertBodyMetric } from "@/app/(tabs)/today-actions";
 import type { BodyMetric } from "@/lib/today";
@@ -42,11 +42,13 @@ export function WeightWidget({
     <>
       <button
         type="button"
+        data-testid="weight-widget"
         onClick={() => setOpen(true)}
+        aria-label="Peser — enregistrer le poids du jour"
         className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-left active:bg-surface-raised"
       >
         <span className="flex items-center gap-2.5 text-sm">
-          <Barbell size={18} className="text-muted" aria-hidden />
+          <Scales size={18} className="text-muted" aria-hidden />
           {metric?.weight_kg != null ? (
             <span>
               <span className="font-medium">{metric.weight_kg} kg</span>
@@ -55,7 +57,7 @@ export function WeightWidget({
               )}
             </span>
           ) : (
-            <span className="text-muted">Pesée du jour</span>
+            <span className="text-muted">Se peser aujourd&apos;hui</span>
           )}
         </span>
         <CaretRight size={16} className="text-faint" aria-hidden />

@@ -7,6 +7,7 @@ import {
   GearSix,
 } from "@phosphor-icons/react/dist/ssr";
 import { brusselsDay, shiftDay } from "@/lib/brussels-day.mjs";
+import { dayNavTargets } from "@/lib/today";
 
 const label = (date: string, today: string) => {
   if (date === today) return "Aujourd'hui";
@@ -21,13 +22,14 @@ const label = (date: string, today: string) => {
 
 export function DayNav({ date, streak }: { date: string; streak: number }) {
   const today = brusselsDay();
-  const atToday = date === today;
+  // Cibles partagées avec le swipe (lot 10) : pas de futur au-delà d'aujourd'hui.
+  const { prev, next } = dayNavTargets(date, today);
 
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1">
         <Link
-          href={`/?date=${shiftDay(date, -1)}`}
+          href={`/?date=${prev}`}
           aria-label="Jour précédent"
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
         >
@@ -36,13 +38,13 @@ export function DayNav({ date, streak }: { date: string; streak: number }) {
         <h1 className="min-w-28 text-center text-lg font-semibold capitalize tracking-tight">
           {label(date, today)}
         </h1>
-        {atToday ? (
+        {next === null ? (
           <span className="flex h-10 w-10 items-center justify-center text-faint" aria-hidden>
             <CaretRight size={20} />
           </span>
         ) : (
           <Link
-            href={`/?date=${shiftDay(date, 1)}`}
+            href={`/?date=${next}`}
             aria-label="Jour suivant"
             className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
           >

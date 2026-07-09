@@ -10,6 +10,7 @@ import {
 import { getDayPlan } from "@/lib/plan-server";
 import type { PlanSuggestionData } from "@/components/today/plan-suggestion";
 import { DayNav } from "@/components/today/day-nav";
+import { DaySwipe } from "@/components/today/day-swipe";
 import { MacroSummary } from "@/components/today/macro-summary";
 import { SlotSection } from "@/components/today/slot-section";
 import { WeightWidget } from "@/components/today/weight-widget";
@@ -63,22 +64,24 @@ export default async function AujourdhuiPage({
   }));
 
   return (
-    <main className="space-y-4">
-      <DayNav date={date} streak={streak} />
-      <MacroSummary totals={totals} targets={targets} />
-      <WeightWidget key={date + (metric?.id ?? "")} date={date} metric={metric} />
-      <TodayProvider date={date} recipes={picker}>
-        <div className="space-y-4">
-          {SLOT_ORDER.map((slot) => (
-            <SlotSection
-              key={slot}
-              slot={slot}
-              logs={logs.filter((l) => l.slot === slot)}
-              suggestion={suggestions.get(slot)}
-            />
-          ))}
-        </div>
-      </TodayProvider>
-    </main>
+    <DaySwipe date={date} today={today}>
+      <main className="space-y-4">
+        <DayNav date={date} streak={streak} />
+        <MacroSummary totals={totals} targets={targets} />
+        <WeightWidget key={date + (metric?.id ?? "")} date={date} metric={metric} />
+        <TodayProvider date={date} recipes={picker}>
+          <div className="space-y-4">
+            {SLOT_ORDER.map((slot) => (
+              <SlotSection
+                key={slot}
+                slot={slot}
+                logs={logs.filter((l) => l.slot === slot)}
+                suggestion={suggestions.get(slot)}
+              />
+            ))}
+          </div>
+        </TodayProvider>
+      </main>
+    </DaySwipe>
   );
 }

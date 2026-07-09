@@ -1,4 +1,7 @@
 // Types et constantes isomorphes de l'écran Aujourd'hui.
+// dayNavTargets/recipeHref : module pur (testé directement par verify-lot10).
+export { dayNavTargets, recipeHref } from "@/lib/day-nav.mjs";
+
 export type Slot = "petit_dej" | "dejeuner" | "collation" | "diner" | "extra";
 
 export const SLOT_ORDER: Slot[] = [

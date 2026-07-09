@@ -16,7 +16,7 @@ export function Sheet({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
+    <div data-noswipe className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={title}>
       <button
         aria-label="Fermer"
         className="absolute inset-0 bg-black/60"

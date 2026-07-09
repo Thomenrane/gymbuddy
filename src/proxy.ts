@@ -28,10 +28,15 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Ne rien mettre entre createServerClient et getUser() (doc Supabase SSR).
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Perf : getClaims() vérifie le JWT LOCALEMENT (clés asymétriques, JWKS
+  // en cache) au lieu d'un aller-retour réseau vers l'Auth Supabase à
+  // CHAQUE navigation comme getUser(). Rafraîchit quand même la session
+  // (lecture du cookie). Si le projet est encore en HS256, getClaims
+  // retombe sur getUser (aucune régression). Rien entre createServerClient
+  // et cet appel (doc Supabase SSR). La sécurité d'accès aux données reste
+  // la RLS ; ici on ne fait qu'un aiguillage de route.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   const isPublic =

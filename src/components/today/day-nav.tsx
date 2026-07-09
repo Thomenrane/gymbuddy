@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { CaretLeft, CaretRight, Fire, GearSix } from "@phosphor-icons/react/dist/ssr";
+import {
+  CalendarBlank,
+  CaretLeft,
+  CaretRight,
+  Fire,
+  GearSix,
+} from "@phosphor-icons/react/dist/ssr";
 import { brusselsDay, shiftDay } from "@/lib/brussels-day.mjs";
 
 const label = (date: string, today: string) => {
@@ -52,6 +58,13 @@ export function DayNav({ date, streak }: { date: string; streak: number }) {
             {streak}
           </span>
         )}
+        <Link
+          href="/plan"
+          aria-label="Plan de la semaine"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
+        >
+          <CalendarBlank size={20} />
+        </Link>
         <Link
           href="/reglages"
           aria-label="Réglages"

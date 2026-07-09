@@ -59,6 +59,22 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Transition d'entrée du jour après un swipe/changement de jour —
+   minimaliste (fondu + léger glissement vertical), direction-agnostique. */
+@keyframes day-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.day-in {
+  animation: day-in 0.22s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

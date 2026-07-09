@@ -25,12 +25,6 @@ export type PlanEntry = {
   recipe: PlanRecipe | null;
 };
 
-// Règles Alan : déplacées dans le module pur src/lib/alan.mjs (Phase 5,
-// testé directement par verify-phase5.sh) — ré-exportées ici pour les
-// importeurs existants (plan, MCP, compteurs).
-export { ALAN_RULES, alanCounts } from "@/lib/alan.mjs";
-export type { AlanCount } from "@/lib/alan.mjs";
-
 /** Delta jour vs cible "vert si ±5%" (addendum Phase 6). */
 export function withinTolerance(value: number, target: number, pct = 0.05) {
   return Math.abs(value - target) <= target * pct;

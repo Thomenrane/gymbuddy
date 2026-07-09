@@ -2,6 +2,7 @@ import "server-only";
 import { mcpDb } from "./db";
 import { brusselsDay, isIsoDate, shiftDay } from "@/lib/brussels-day.mjs";
 import { roundMacro } from "@/lib/today";
+import { oilyFishCount } from "@/lib/oily-fish.mjs";
 
 // ============================================================
 // Logique métier des 14 tools MCP (PRD §5).
@@ -11,8 +12,6 @@ import { roundMacro } from "@/lib/today";
 
 const SLOTS = ["petit_dej", "dejeuner", "collation", "diner", "extra"];
 const WORKOUT_TYPES = ["muscu", "running", "padel", "autre"];
-// Compteurs Alan (tags des recettes loggées)
-const ALAN_TAGS = ["poisson", "pates", "hache", "oeufs", "legumineuses"] as const;
 // Workouts seedés pour le pré-remplissage des poids : exclus des stats
 // (get_day, get_summary, get_workouts) mais conservés dans
 // get_exercise_history — c'est leur raison d'être (décision PO, lot 2.1).
@@ -133,7 +132,6 @@ export async function getSummary(startDate: string, endDate: string) {
 
   // Moyennes sur les jours effectivement loggés
   const byDay = new Map<string, { kcal: number; p: number; g: number; l: number }>();
-  const alan: Record<string, number> = Object.fromEntries(ALAN_TAGS.map((t) => [t, 0]));
   for (const l of logs.data ?? []) {
     const d = byDay.get(l.log_date) ?? { kcal: 0, p: 0, g: 0, l: 0 };
     d.kcal += l.kcal;
@@ -141,10 +139,13 @@ export async function getSummary(startDate: string, endDate: string) {
     d.g += Number(l.carbs_g);
     d.l += Number(l.fat_g);
     byDay.set(l.log_date, d);
-    const tags: string[] =
-      (l.recipe as unknown as { tags: string[] | null } | null)?.tags ?? [];
-    for (const t of ALAN_TAGS) if (tags.includes(t)) alan[t] += 1;
   }
+  // Lot 8 : seul le poisson gras est suivi (les compteurs Alan sont retirés)
+  const oily_fish_count = oilyFishCount(
+    (logs.data ?? []).map((l) => ({
+      tags: (l.recipe as unknown as { tags: string[] | null } | null)?.tags ?? null,
+    }))
+  );
   const daysLogged = byDay.size;
   const avg = (sel: (d: { kcal: number; p: number; g: number; l: number }) => number) =>
     daysLogged === 0
@@ -187,10 +188,7 @@ export async function getSummary(startDate: string, endDate: string) {
     },
     weight: { raw: metrics.data ?? [], weekly_average: weeklyWeight },
     workouts_by_type: workoutsByType,
-    alan_counters: {
-      ...alan,
-      rules: "poisson >=2 · pates <=2 · hache <=2 · oeufs <=8 · legumineuses >=1 (par semaine)",
-    },
+    oily_fish_count,
   };
 }
 
@@ -560,7 +558,6 @@ export async function logBodyMetric(input: {
 // aucun solveur automatique dans l'app (non-goal explicite v2.1).
 // ============================================================
 import { aggregateShoppingList, shoppingListAsText } from "@/lib/shopping-list.mjs";
-import { alanCounts } from "@/lib/plan";
 
 const PLAN_RECIPE_COLS =
   "id, code, name, kcal, protein_g, carbs_g, fat_g, tags, ingredients";
@@ -635,7 +632,7 @@ export async function getPlan(startDate: string, endDate: string) {
     end_date: end,
     targets,
     days: planDays(rows, targets),
-    alan_counters: alanCounts(rows.map((r) => ({ tags: r.recipe?.tags ?? null }))),
+    oily_fish_count: oilyFishCount(rows.map((r) => ({ tags: r.recipe?.tags ?? null }))),
   };
 }
 

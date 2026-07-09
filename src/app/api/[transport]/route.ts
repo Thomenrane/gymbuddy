@@ -64,7 +64,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "get_summary",
-      "Résumé d'une période : moyennes kcal/macros des jours loggés, poids (brut + moyenne hebdo), séances par type, compteurs Alan (tags).",
+      "Résumé d'une période : moyennes kcal/macros des jours loggés, poids (brut + moyenne hebdo), séances par type, nombre de repas au poisson gras (oily_fish_count).",
       { start_date: date, end_date: date },
       jsonTool(({ start_date, end_date }) => svc.getSummary(start_date, end_date))
     );
@@ -225,7 +225,7 @@ const handler = createMcpHandler(
     // ---------- Phase 6 : planificateur ----------
     server.tool(
       "get_plan",
-      "Plan de repas sur une période : entrées par jour, totaux macros/jour, deltas vs cibles (±5%), compteurs Alan de la période.",
+      "Plan de repas sur une période : entrées par jour, totaux macros/jour, deltas vs cibles (±5%), nombre d'entrées au poisson gras (oily_fish_count).",
       { start_date: date, end_date: date },
       jsonTool(({ start_date, end_date }) => svc.getPlan(start_date, end_date))
     );
@@ -244,7 +244,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "plan_week",
-      "Écrit un plan en LOT ATOMIQUE (tout ou rien) : si un recipe_code est inconnu ou le lot invalide, rien n'est écrit. Upsert par jour+slot (remplace). Renvoie le plan résultant avec totaux et compteurs Alan. C'est LE tool pour composer une semaine en conversation.",
+      "Écrit un plan en LOT ATOMIQUE (tout ou rien) : si un recipe_code est inconnu ou le lot invalide, rien n'est écrit. Upsert par jour+slot (remplace). Renvoie le plan résultant avec totaux et oily_fish_count. C'est LE tool pour composer une semaine en conversation.",
       {
         entries: z
           .array(

@@ -1,6 +1,6 @@
 import { getTargets } from "@/lib/today-server";
 import {
-  getAlanWeek,
+  getOilyFishWeek,
   getBodyTrends,
   getMealAverages,
   getProgressionSeries,
@@ -11,20 +11,20 @@ import { WaistChart } from "@/components/trends/waist-chart";
 import { ProgressionChart } from "@/components/trends/progression-chart";
 import { AveragesPanel } from "@/components/trends/averages-panel";
 import { SessionsChart } from "@/components/trends/sessions-chart";
-import { AlanCounters } from "@/components/plan/alan-counters";
+import { OilyFishCounter } from "@/components/trends/oily-fish-counter";
 
 export const dynamic = "force-dynamic";
 
 // Onglet Tendances — les 6 visualisations du PRD §4 :
 // poids (moyenne hebdo principale), tour de taille, progression des
-// charges, moyennes 7j/30j vs cibles, compteurs Alan de la semaine,
+// charges, moyennes 7j/30j vs cibles, poisson gras de la semaine,
 // séances par semaine par type.
 export default async function TendancesPage() {
-  const [targets, body, meals, alan, progression, sessions] = await Promise.all([
+  const [targets, body, meals, oilyFish, progression, sessions] = await Promise.all([
     getTargets(),
     getBodyTrends(),
     getMealAverages(),
-    getAlanWeek(),
+    getOilyFishWeek(),
     getProgressionSeries(),
     getWeeklySessions(),
   ]);
@@ -49,8 +49,8 @@ export default async function TendancesPage() {
       </section>
 
       <section>
-        <h2 className="mb-1.5 text-sm font-medium text-muted">Alan — semaine en cours</h2>
-        <AlanCounters counts={alan.counts} />
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Poisson gras — semaine en cours</h2>
+        <OilyFishCounter count={oilyFish.count} />
       </section>
 
       <section>

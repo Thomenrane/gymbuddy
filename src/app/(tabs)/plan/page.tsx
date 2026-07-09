@@ -6,10 +6,10 @@ import {
   ShoppingCart,
 } from "@phosphor-icons/react/dist/ssr";
 import { brusselsDay, isIsoDate, mondayOf, shiftDay } from "@/lib/brussels-day.mjs";
-import { alanCounts } from "@/lib/plan";
+import { oilyFishCount } from "@/lib/oily-fish.mjs";
 import { getWeekPlan } from "@/lib/plan-server";
 import { getPickerRecipes, getTargets } from "@/lib/today-server";
-import { AlanCounters } from "@/components/plan/alan-counters";
+import { OilyFishCounter } from "@/components/trends/oily-fish-counter";
 import {
   PlanDay,
   PlanProvider,
@@ -49,7 +49,7 @@ export default async function PlanPage({
     kcal: r.kcal,
     protein_g: Number(r.protein_g),
   }));
-  const counts = alanCounts(
+  const oilyFish = oilyFishCount(
     entries.map((e) => ({ tags: e.recipe?.tags ?? null }))
   );
 
@@ -100,7 +100,7 @@ export default async function PlanPage({
         </Link>
       </div>
 
-      <AlanCounters counts={counts} />
+      <OilyFishCounter count={oilyFish} />
 
       <PlanProvider recipes={picker}>
         <div className="space-y-3">

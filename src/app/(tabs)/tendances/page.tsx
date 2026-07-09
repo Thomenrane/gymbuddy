@@ -1,8 +1,67 @@
-export default function TendancesPage() {
+import { getTargets } from "@/lib/today-server";
+import {
+  getAlanWeek,
+  getBodyTrends,
+  getMealAverages,
+  getProgressionSeries,
+  getWeeklySessions,
+} from "@/lib/trends-server";
+import { WeightChart } from "@/components/trends/weight-chart";
+import { WaistChart } from "@/components/trends/waist-chart";
+import { ProgressionChart } from "@/components/trends/progression-chart";
+import { AveragesPanel } from "@/components/trends/averages-panel";
+import { SessionsChart } from "@/components/trends/sessions-chart";
+import { AlanCounters } from "@/components/plan/alan-counters";
+
+export const dynamic = "force-dynamic";
+
+// Onglet Tendances — les 6 visualisations du PRD §4 :
+// poids (moyenne hebdo principale), tour de taille, progression des
+// charges, moyennes 7j/30j vs cibles, compteurs Alan de la semaine,
+// séances par semaine par type.
+export default async function TendancesPage() {
+  const [targets, body, meals, alan, progression, sessions] = await Promise.all([
+    getTargets(),
+    getBodyTrends(),
+    getMealAverages(),
+    getAlanWeek(),
+    getProgressionSeries(),
+    getWeeklySessions(),
+  ]);
+
   return (
-    <main>
-      <h1 className="text-2xl font-semibold tracking-tight">Tendances</h1>
-      <p className="mt-2 text-muted">Écran construit en Phase 5.</p>
+    <main className="space-y-5">
+      <h1 className="text-lg font-semibold tracking-tight">Tendances</h1>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Poids</h2>
+        <WeightChart metrics={body.metrics} weekly={body.weekly} />
+      </section>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Progression des charges</h2>
+        <ProgressionChart series={progression} />
+      </section>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Moyennes vs cibles</h2>
+        <AveragesPanel d7={meals.d7} d30={meals.d30} targets={targets} />
+      </section>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Alan — semaine en cours</h2>
+        <AlanCounters counts={alan.counts} />
+      </section>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Séances par semaine</h2>
+        <SessionsChart weeks={sessions} />
+      </section>
+
+      <section>
+        <h2 className="mb-1.5 text-sm font-medium text-muted">Tour de taille</h2>
+        <WaistChart metrics={body.metrics} />
+      </section>
     </main>
   );
 }

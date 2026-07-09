@@ -25,37 +25,11 @@ export type PlanEntry = {
   recipe: PlanRecipe | null;
 };
 
-// Règles Alan (partagées avec Tendances en Phase 5) — par semaine.
-export const ALAN_RULES = [
-  { tag: "poisson", label: "poisson", min: 2 },
-  { tag: "pates", label: "pâtes", max: 2 },
-  { tag: "hache", label: "haché", max: 2 },
-  { tag: "oeufs", label: "œufs", max: 8 },
-  { tag: "legumineuses", label: "légumineuses", min: 1 },
-] as const;
-
-export type AlanCount = {
-  tag: string;
-  label: string;
-  count: number;
-  min?: number;
-  max?: number;
-  ok: boolean;
-};
-
-/** Compte les tags Alan sur une liste de recettes (planifiées ou loggées). */
-export function alanCounts(
-  recipes: { tags: string[] | null }[]
-): AlanCount[] {
-  return ALAN_RULES.map((rule) => {
-    const count = recipes.filter((r) => r.tags?.includes(rule.tag)).length;
-    const min = "min" in rule ? rule.min : undefined;
-    const max = "max" in rule ? rule.max : undefined;
-    const ok =
-      (min === undefined || count >= min) && (max === undefined || count <= max);
-    return { tag: rule.tag, label: rule.label, count, min, max, ok };
-  });
-}
+// Règles Alan : déplacées dans le module pur src/lib/alan.mjs (Phase 5,
+// testé directement par verify-phase5.sh) — ré-exportées ici pour les
+// importeurs existants (plan, MCP, compteurs).
+export { ALAN_RULES, alanCounts } from "@/lib/alan.mjs";
+export type { AlanCount } from "@/lib/alan.mjs";
 
 /** Delta jour vs cible "vert si ±5%" (addendum Phase 6). */
 export function withinTolerance(value: number, target: number, pct = 0.05) {

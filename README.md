@@ -49,4 +49,4 @@ et un accès réseau sortant vers `*.supabase.co`.
 | 3 | Training (templates, pré-remplissage charges) | ✅ |
 | 4 | MCP (14 tools) | ✅ |
 | 6 | Planificateur (vue semaine, liste de courses, 5 tools MCP plan) | ✅ |
-| 5 | Tendances | — |
+| 5 | Tendances (6 visualisations, moyenne hebdo de poids) | ✅ |

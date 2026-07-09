@@ -56,7 +56,7 @@ insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingr
 values ('C2', 'Fromage blanc chocolaté', 'collation', 350, 28, 35, 10, '[{"item":"fromage blanc maigre","qty":250,"unit":"g"},{"item":"cacao non sucré","qty":10,"unit":"g"},{"item":"banane","qty":1,"unit":"pièce"},{"item":"beurre de cacahuète","qty":10,"unit":"g"}]'::jsonb, array['Mélanger cacao + fromage blanc (+ édulcorant si besoin).'], 3, array['anti-sucre'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
-values ('C3', 'Shake whey lait fruit', 'collation', 350, 33, 28, 12, '[{"item":"whey","qty":30,"unit":"g"},{"item":"lait demi-écrémé","qty":250,"unit":"ml"},{"item":"fruit","qty":1,"unit":"pièce"},{"item":"amandes","qty":15,"unit":"g"}]'::jsonb, array['Shaker.'], 2, array['rapide','post-training'], 'plan')
+values ('C3', 'Shake whey lait fruit', 'collation', 419, 36, 37, 14, '[{"item":"whey","qty":30,"unit":"g"},{"item":"lait demi-écrémé","qty":250,"unit":"ml"},{"item":"fruit","qty":1,"unit":"pièce"},{"item":"amandes","qty":15,"unit":"g"}]'::jsonb, array['Shaker.'], 2, array['rapide','post-training'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
 values ('C4', 'Cottage crackers', 'collation', 290, 20, 25, 8, '[{"item":"cottage cheese","qty":150,"unit":"g"},{"item":"crackers complets","qty":4,"unit":"pièce"},{"item":"tomates cerises","qty":80,"unit":"g"}]'::jsonb, array['Assembler.'], 2, array['rapide'], 'plan')
@@ -80,7 +80,7 @@ insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingr
 values ('D3', 'Bolognaise complète', 'diner', 640, 48, 72, 13, '[{"item":"haché de bœuf 5% MG","qty":150,"unit":"g"},{"item":"pâtes complètes","qty":80,"unit":"g","note":"cru — à peser"},{"item":"sauce tomate nature","qty":200,"unit":"g"},{"item":"légumes dans la sauce (courgette, poivron, champignons)","qty":150,"unit":"g"}]'::jsonb, array['Revenir le haché, ajouter légumes puis sauce, mijoter 15 min.'], 25, array['pates','hache'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
-values ('D4', 'Wok crevettes riz brun', 'diner', 600, 45, 68, 13, '[{"item":"crevettes décortiquées","qty":200,"unit":"g"},{"item":"riz brun","qty":75,"unit":"g","note":"cru"},{"item":"wok de légumes surgelés","qty":300,"unit":"g"},{"item":"huile de sésame","qty":10,"unit":"g"},{"item":"sauce soja réduite en sel + gingembre","qty":1,"unit":"portion"}]'::jsonb, array['Wok légumes puis crevettes, servir sur le riz.'], 15, array['poisson','rapide'], 'plan')
+values ('D4', 'Wok crevettes riz brun', 'diner', 702, 56, 78, 17, '[{"item":"crevettes décortiquées","qty":200,"unit":"g"},{"item":"riz brun","qty":75,"unit":"g","note":"cru"},{"item":"wok de légumes surgelés","qty":300,"unit":"g"},{"item":"huile de sésame","qty":10,"unit":"g"},{"item":"sauce soja réduite en sel + gingembre","qty":1,"unit":"portion"}]'::jsonb, array['Wok légumes puis crevettes, servir sur le riz.'], 15, array['poisson','rapide'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
 values ('D5', 'Chili con carne (1 portion)', 'diner', 650, 46, 78, 12, '[{"item":"haché de bœuf 5% MG","qty":140,"unit":"g"},{"item":"haricots rouges égouttés","qty":100,"unit":"g"},{"item":"riz brun","qty":60,"unit":"g","note":"cru"},{"item":"tomates concassées","qty":200,"unit":"g"},{"item":"poivron + oignon","qty":150,"unit":"g"},{"item":"épices chili","qty":1,"unit":"portion"}]'::jsonb, array['Préparer 4 portions au meal prep, congeler 2.'], 40, array['hache','legumineuses','meal-prep'], 'plan')
@@ -95,13 +95,13 @@ insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingr
 values ('D8', 'Tajine poulet pois chiches', 'diner', 600, 48, 65, 10, '[{"item":"blanc de poulet","qty":150,"unit":"g","note":"cru"},{"item":"pois chiches cuits","qty":150,"unit":"g"},{"item":"semoule complète","qty":40,"unit":"g","note":"cru"},{"item":"légumes (courgette, carotte, tomate)","qty":200,"unit":"g"},{"item":"ras el hanout","qty":1,"unit":"portion"}]'::jsonb, array['Mijoter poulet + légumes + pois chiches aux épices, servir sur semoule.'], 30, array['legumineuses'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
-values ('X1', 'Extra : carré chocolat noir + fruit', 'collation', 130, 1, 25, 5, '[{"item":"chocolat noir 85%","qty":10,"unit":"g"},{"item":"fruit","qty":1,"unit":"pièce"}]'::jsonb, array['1x/jour max, assumé.'], 0, array['extra','anti-sucre'], 'plan')
+values ('X1', 'Extra : carré chocolat noir + fruit', 'collation', 155, 2, 25, 5, '[{"item":"chocolat noir 85%","qty":10,"unit":"g"},{"item":"fruit","qty":1,"unit":"pièce"}]'::jsonb, array['1x/jour max, assumé.'], 0, array['extra','anti-sucre'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
-values ('X2', 'Extra : soupe de légumes (entrée)', 'collation', 80, 3, 12, 2, '[{"item":"soupe de légumes maison","qty":300,"unit":"ml"}]'::jsonb, array['En entrée du dîner pour éviter la deuxième portion.'], 2, array['extra','anti-faim'], 'plan')
+values ('X2', 'Extra : soupe de légumes (entrée)', 'collation', 105, 5, 15, 3, '[{"item":"soupe de légumes maison","qty":300,"unit":"ml"}]'::jsonb, array['En entrée du dîner pour éviter la deuxième portion.'], 2, array['extra','anti-faim'], 'plan')
 on conflict (code) do nothing;
 insert into recipes (code, name, category, kcal, protein_g, carbs_g, fat_g, ingredients, steps, prep_min, tags, source)
-values ('X3', 'Extra : fruit + poignée de noix', 'collation', 170, 4, 22, 8, '[{"item":"fruit","qty":1,"unit":"pièce"},{"item":"noix non salées","qty":15,"unit":"g"}]'::jsonb, array['—'], 0, array['extra'], 'plan')
+values ('X3', 'Extra : fruit + poignée de noix', 'collation', 200, 3, 23, 10, '[{"item":"fruit","qty":1,"unit":"pièce"},{"item":"noix non salées","qty":15,"unit":"g"}]'::jsonb, array['—'], 0, array['extra'], 'plan')
 on conflict (code) do nothing;
 
 -- ---------- Catalogue d'exercices (13) ----------

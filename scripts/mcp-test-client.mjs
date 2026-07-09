@@ -41,7 +41,8 @@ const EXPECTED = [
   "log_workout", "get_workouts", "get_exercise_history", "log_body_metric",
 ];
 const names = tools.map((t) => t.name);
-check(`14 tools exposés (${names.length})`, EXPECTED.every((t) => names.includes(t)) && names.length === 14);
+// Inventaire total : 14 (phase 4) + 5 (phase 6, plan) + 9 (lot 7) = 28.
+check(`les 14 tools phase 4 exposés (total ${names.length})`, EXPECTED.every((t) => names.includes(t)) && names.length === 28);
 
 // --- 1/2. get_targets + update_targets (avec restauration) ---
 let r = await call("get_targets");

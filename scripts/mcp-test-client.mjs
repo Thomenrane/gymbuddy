@@ -141,11 +141,11 @@ check("log_body_metric : upsert même date (82.0 kg + taille)", Number(r.data.we
 // --- 4. get_summary ---
 r = await call("get_summary", { start_date: "1999-11-15", end_date: "1999-11-21" });
 check(
-  "get_summary : moyenne hebdo poids=82, 1 muscu, compteurs Alan présents",
+  "get_summary : moyenne hebdo poids=82, 1 muscu, oily_fish_count présent",
   r.data.weight.weekly_average.length === 1 &&
     Number(r.data.weight.weekly_average[0].avg_weight_kg) === 82 &&
     r.data.workouts_by_type.muscu === 1 &&
-    typeof r.data.alan_counters.poisson === "number"
+    typeof r.data.oily_fish_count === "number"
 );
 
 // --- erreur métier propre ---

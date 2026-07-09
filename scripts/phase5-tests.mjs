@@ -1,11 +1,11 @@
 // Tests Phase 5 (Tendances) : les calculs de l'app (src/lib/trends.mjs,
-// src/lib/alan.mjs — les modules mêmes que la page utilise) sont exécutés
+// src/lib/oily-fish.mjs — les modules mêmes que la page utilise) sont exécutés
 // sur des données de test insérées en base puis relues EXACTEMENT comme
 // l'app les relit, et comparés à des CALCULS DE RÉFÉRENCE refaits en dur
 // ci-dessous. Nettoyage complet vérifié.
 // Conventions : pesées/repas en 1999, workouts en 2126, préfixe __P5.
 import { weeklyWeightAverages, exerciseProgression, periodAverages, sessionsPerWeek } from "../src/lib/trends.mjs";
-import { alanCounts } from "../src/lib/alan.mjs";
+import { oilyFishCount } from "../src/lib/oily-fish.mjs";
 
 const SB = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SRK = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -123,7 +123,7 @@ try {
   //   14/07 : 900+600+300 = 1800 / 70+40+10 = 120     (poisson + 2× œufs)
   // Référence : kcal (2000+2500+1800)/3 = 2100 ; P (150+180+120)/3 = 150
   const recipes = await rest("POST", "recipes", [
-    { name: "__P5_R_FISH__", category: "diner", kcal: 1, protein_g: 1, carbs_g: 1, fat_g: 1, ingredients: [{ item: "t", qty: 1, unit: "g" }], tags: ["poisson"], source: "florian" },
+    { name: "__P5_R_FISH__", category: "diner", kcal: 1, protein_g: 1, carbs_g: 1, fat_g: 1, ingredients: [{ item: "t", qty: 1, unit: "g" }], tags: ["poisson", "poisson-gras"], source: "florian" },
     { name: "__P5_R_PASTA__", category: "diner", kcal: 1, protein_g: 1, carbs_g: 1, fat_g: 1, ingredients: [{ item: "t", qty: 1, unit: "g" }], tags: ["pates"], source: "florian" },
     { name: "__P5_R_EGGS__", category: "petit_dej", kcal: 1, protein_g: 1, carbs_g: 1, fat_g: 1, ingredients: [{ item: "t", qty: 1, unit: "g" }], tags: ["oeufs"], source: "florian" },
   ]);
@@ -149,24 +149,14 @@ try {
     JSON.stringify(avg)
   );
 
-  // ================= 4. Compteurs Alan de la semaine =================
-  // Référence : poisson 2 (ok min 2) · pates 1 (ok max 2) · hache 0 (ok)
-  //             · oeufs 3 (ok max 8) · legumineuses 0 (KO min 1)
+  // ================= 4. Compteur poisson gras de la semaine (lot 8) =================
+  // __P5_R_FISH__ (poisson-gras) loggé les 12/07 et 14/07 → oily_fish_count = 2
   const logsWithTags = await rest(
     "GET",
     "meal_logs?log_date=gte.1999-07-12&log_date=lte.1999-07-18&recipe_id=not.is.null&select=log_date,recipe:recipes(tags)"
   );
-  const counts = alanCounts(logsWithTags.map((l) => ({ tags: l.recipe?.tags ?? null })));
-  const byTag = Object.fromEntries(counts.map((c) => [c.tag, c]));
-  check(
-    "compteurs Alan : poisson 2 ✓ · pâtes 1 ✓ · haché 0 ✓ · œufs 3 ✓ · légumineuses 0 ✗",
-    byTag.poisson.count === 2 && byTag.poisson.ok === true &&
-      byTag.pates.count === 1 && byTag.pates.ok === true &&
-      byTag.hache.count === 0 && byTag.hache.ok === true &&
-      byTag.oeufs.count === 3 && byTag.oeufs.ok === true &&
-      byTag.legumineuses.count === 0 && byTag.legumineuses.ok === false,
-    JSON.stringify(counts)
-  );
+  const oily = oilyFishCount(logsWithTags.map((l) => ({ tags: l.recipe?.tags ?? null })));
+  check("compteur poisson gras : 2 repas loggés sur la semaine", oily === 2, `oily=${oily}`);
 
   // ================= 5. Séances par semaine par type =================
   await rest("POST", "workouts", { workout_date: "2126-06-11", type: "padel" });

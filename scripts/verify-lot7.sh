@@ -3,9 +3,12 @@
 # Contrat de fin de Lot 7 (couverture MCP complète) — exit != 0 si incomplet.
 # 1. tsc + next build verts
 # 2. Via HTTP + bearer (scripts/lot7-tests.mjs), assertions de contenu :
-#    - create_workout_template (2 exos : reps min/max, RPE, repos, note)
+#    - create_workout_template (2 exos : reps min/max, RPE, repos, note de
+#      LIGNE + note catalogue — arbitrage PO : les deux coexistent)
 #    - update_workout_template = remplacement complet (ordre inversé +
-#      3e exo créé à la volée), vérifié en base
+#      3e exo créé à la volée), vérifié en base ; note de ligne écrite
+#      puis RELUE via list_workout_templates
+#    - list_exercises : catalogue complet + filtre query
 #    - TEST EXPLICITE : modifier le template ne réécrit aucun workout
 #      passé (snapshot des séries avant/après, identique)
 #    - archivage → exclu de list_workout_templates sans include_archived
@@ -69,7 +72,7 @@ for i in $(seq 1 30); do
 done
 ok "next start prêt (port $PORT)"
 
-echo "-- 3. Les 9 tools lot 7 (assertions de contenu + base) --"
+echo "-- 3. Les 10 tools lot 7 (assertions de contenu + base) --"
 if NODE_USE_ENV_PROXY=1 MCP_URL="http://localhost:$PORT/api/mcp" node scripts/lot7-tests.mjs; then
   ok "tests lot 7 : templates, exercices, workouts, mesures, baselines protégés"
 else

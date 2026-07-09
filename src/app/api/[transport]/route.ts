@@ -285,6 +285,10 @@ const handler = createMcpHandler(
       note: z
         .string()
         .optional()
+        .describe("Note de LIGNE, contexte de séance (superset, tempo…)"),
+      catalog_note: z
+        .string()
+        .optional()
         .describe("Note catalogue (convention de poids), appliquée si l'exo est créé"),
     });
     const workoutExercises = z
@@ -332,6 +336,13 @@ const handler = createMcpHandler(
         exercises: z.array(templateExercise).min(1).optional(),
       },
       jsonTool((args) => svc.updateWorkoutTemplate(args))
+    );
+
+    server.tool(
+      "list_exercises",
+      "Catalogue d'exercices (nom, groupe musculaire, note). À consulter AVANT de matcher des noms dans log_workout ou les templates, pour éviter les quasi-doublons qui fragmenteraient l'historique des charges.",
+      { query: z.string().optional().describe("Filtre partiel sur le nom") },
+      jsonTool(({ query }) => svc.listExercises(query))
     );
 
     server.tool(

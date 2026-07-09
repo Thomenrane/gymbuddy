@@ -762,13 +762,15 @@ type TemplateExerciseInput = {
   reps_max?: number;
   target_rpe?: number;
   rest_seconds?: number;
-  /** Note CATALOGUE (convention de poids) — appliquée seulement si l'exo est créé. */
+  /** Note de LIGNE (contexte de séance : superset, tempo…) — arbitrage PO lot 7. */
   note?: string;
+  /** Note CATALOGUE (convention de poids) — appliquée seulement si l'exo est créé. */
+  catalog_note?: string;
 };
 
 const TEMPLATE_COLS = `id, name, type, is_active, created_at,
   template_exercises(position, default_sets, default_reps_min, default_reps_max,
-    target_rpe, rest_seconds, exercise:exercises(id, name, note))`;
+    target_rpe, rest_seconds, note, exercise:exercises(id, name, note))`;
 
 async function fetchTemplate(id: string) {
   const { data, error } = await mcpDb()
@@ -790,7 +792,7 @@ async function replaceTemplateExercises(
   const created: string[] = [];
   const rows: object[] = [];
   for (const [pos, ex] of exercises.entries()) {
-    const match = await matchOrCreateExercise(ex.name, ex.note);
+    const match = await matchOrCreateExercise(ex.name, ex.catalog_note);
     if (match.created) created.push(ex.name);
     rows.push({
       template_id: templateId,
@@ -801,6 +803,7 @@ async function replaceTemplateExercises(
       default_reps_max: ex.reps_max ?? null,
       target_rpe: ex.target_rpe ?? null,
       rest_seconds: ex.rest_seconds ?? null,
+      note: ex.note ?? null,
     });
   }
   // Remplacement COMPLET de la liste (l'ordre du tableau = position)
@@ -871,6 +874,17 @@ export async function updateWorkoutTemplate(input: {
     created = await replaceTemplateExercises(input.id, input.exercises);
   }
   return { template: await fetchTemplate(input.id), exercises_created: created };
+}
+
+export async function listExercises(query?: string) {
+  let q = mcpDb()
+    .from("exercises")
+    .select("id, name, muscle_group, measure_type, note")
+    .order("name");
+  if (query?.trim()) q = q.ilike("name", `%${query.trim()}%`);
+  const { data, error } = await q;
+  if (error) fail(error.message);
+  return { count: (data ?? []).length, exercises: data ?? [] };
 }
 
 export async function createExercise(input: {

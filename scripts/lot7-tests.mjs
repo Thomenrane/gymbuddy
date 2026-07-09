@@ -83,12 +83,13 @@ try {
   const names = tools.map((t) => t.name);
   const LOT7 = [
     "list_workout_templates", "create_workout_template", "update_workout_template",
-    "create_exercise", "update_exercise", "update_workout", "delete_workout",
-    "get_body_metrics", "delete_body_metric",
+    "list_exercises", "create_exercise", "update_exercise", "update_workout",
+    "delete_workout", "get_body_metrics", "delete_body_metric",
   ];
+  // Inventaire total : 14 (phase 4) + 5 (plan) + 10 (lot 7) = 29.
   check(
-    `9 tools lot 7 exposés (total ${names.length})`,
-    LOT7.every((t) => names.includes(t)) && names.length === 28
+    `10 tools lot 7 exposés (total ${names.length})`,
+    LOT7.every((t) => names.includes(t)) && names.length === 29
   );
 
   // --- 1. create_workout_template : 2 exos créés à la volée, tous champs ---
@@ -96,8 +97,8 @@ try {
     name: "__LOT7_TPL__",
     type: "muscu",
     exercises: [
-      { name: "__LOT7_EXO_A__", sets: 3, reps_min: 4, reps_max: 6, target_rpe: 8, rest_seconds: 150, note: "note test A" },
-      { name: "__LOT7_EXO_B__", sets: 2, reps_min: 8, reps_max: 12, target_rpe: 7, rest_seconds: 90, note: "note test B" },
+      { name: "__LOT7_EXO_A__", sets: 3, reps_min: 4, reps_max: 6, target_rpe: 8, rest_seconds: 150, note: "superset test A", catalog_note: "note test A" },
+      { name: "__LOT7_EXO_B__", sets: 2, reps_min: 8, reps_max: 12, target_rpe: 7, rest_seconds: 90, catalog_note: "note test B" },
     ],
   });
   const tplId = r.data.template?.id;
@@ -107,10 +108,10 @@ try {
   );
   const teRows = await rest(
     "GET",
-    `template_exercises?template_id=eq.${tplId}&select=position,default_sets,default_reps_min,default_reps_max,target_rpe,rest_seconds,exercise:exercises(name,note)&order=position`
+    `template_exercises?template_id=eq.${tplId}&select=position,default_sets,default_reps_min,default_reps_max,target_rpe,rest_seconds,note,exercise:exercises(name,note)&order=position`
   );
   check(
-    "en base : reps min/max, RPE, repos, note catalogue renseignés (exo A)",
+    "en base : reps min/max, RPE, repos, note de LIGNE et note catalogue renseignés",
     teRows.length === 2 &&
       teRows[0].exercise.name === "__LOT7_EXO_A__" &&
       teRows[0].default_sets === 3 &&
@@ -118,7 +119,9 @@ try {
       teRows[0].default_reps_max === 6 &&
       teRows[0].target_rpe === 8 &&
       teRows[0].rest_seconds === 150 &&
+      teRows[0].note === "superset test A" &&
       teRows[0].exercise.note === "note test A" &&
+      teRows[1].note === null &&
       teRows[1].exercise.note === "note test B"
   );
 
@@ -145,14 +148,22 @@ try {
   r = await call("update_workout_template", {
     id: tplId,
     exercises: [
-      { name: "__LOT7_EXO_B__", sets: 2, reps_min: 8, reps_max: 12, target_rpe: 7, rest_seconds: 90 },
+      { name: "__LOT7_EXO_B__", sets: 2, reps_min: 8, reps_max: 12, target_rpe: 7, rest_seconds: 90, note: "tempo 3-1-1" },
       { name: "__LOT7_EXO_A__", sets: 3, reps_min: 4, reps_max: 6, target_rpe: 8, rest_seconds: 150 },
-      { name: "__LOT7_EXO_C__", sets: 4, reps_min: 10, reps_max: 15, target_rpe: 6, rest_seconds: 60, note: "note test C" },
+      { name: "__LOT7_EXO_C__", sets: 4, reps_min: 10, reps_max: 15, target_rpe: 6, rest_seconds: 60, catalog_note: "note test C" },
     ],
   });
   check(
     "update_workout_template : liste remplacée, __LOT7_EXO_C__ créé à la volée",
     !r.isError && r.data.exercises_created.includes("__LOT7_EXO_C__")
+  );
+  // Note de ligne écrite par update_workout_template, RELUE via list_workout_templates
+  r = await call("list_workout_templates", {});
+  const listedTpl = r.data.templates.find((t) => t.name === "__LOT7_TPL__");
+  check(
+    "note de ligne relue via list_workout_templates (B pos 1 : « tempo 3-1-1 », A pos 2 : null)",
+    listedTpl?.template_exercises?.[0]?.note === "tempo 3-1-1" &&
+      listedTpl?.template_exercises?.[1]?.note === null
   );
   const teAfter = await rest(
     "GET",
@@ -201,6 +212,21 @@ try {
   );
   r = await call("create_exercise", { name: "__lot7_exo_d__" });
   check("create_exercise doublon (casse différente) → erreur métier", r.isError && String(r.data.error).includes("existe déjà"));
+
+  // --- 6bis. list_exercises : catalogue complet + filtre ---
+  r = await call("list_exercises", {});
+  check(
+    "list_exercises : catalogue complet (Back Squat présent, groupe jambes)",
+    !r.isError &&
+      r.data.count >= 13 &&
+      r.data.exercises.some((e) => e.name === "Back Squat" && e.muscle_group === "jambes")
+  );
+  r = await call("list_exercises", { query: "__LOT7_EXO" });
+  check(
+    "list_exercises avec query : les 4 exos de test, note catalogue exposée",
+    r.data.count === 4 &&
+      r.data.exercises.some((e) => e.name === "__LOT7_EXO_D__" && e.note === "machine test")
+  );
 
   r = await call("log_workout", {
     date: W2,

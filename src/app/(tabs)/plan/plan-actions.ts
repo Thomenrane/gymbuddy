@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isIsoDate } from "@/lib/brussels-day.mjs";
-import { SLOT_ORDER, roundMacro, type Slot } from "@/lib/today";
+import { mealLogFromPlan } from "@/lib/plan-log.mjs";
+import { SLOT_ORDER, type Slot } from "@/lib/today";
 
 export type ActionResult = { error: string } | { ok: true };
 
@@ -83,24 +84,20 @@ export async function logFromPlan(entryId: string): Promise<ActionResult> {
   if (error) return bad(error.message);
   if (!entry?.recipe) return bad("Entrée de plan introuvable.");
 
-  const recipe = entry.recipe as unknown as {
-    id: string;
-    kcal: number;
-    protein_g: number;
-    carbs_g: number;
-    fat_g: number;
-  };
-  const factor = Number(entry.portion_factor) || 1;
-  const { error: insErr } = await supabase.from("meal_logs").insert({
-    log_date: entry.plan_date,
-    slot: entry.slot,
-    recipe_id: recipe.id,
-    portion_factor: factor,
-    kcal: Math.round(recipe.kcal * factor),
-    protein_g: roundMacro(Number(recipe.protein_g) * factor),
-    carbs_g: roundMacro(Number(recipe.carbs_g) * factor),
-    fat_g: roundMacro(Number(recipe.fat_g) * factor),
-  });
+  const { error: insErr } = await supabase.from("meal_logs").insert(
+    mealLogFromPlan({
+      plan_date: entry.plan_date,
+      slot: entry.slot,
+      portion_factor: entry.portion_factor,
+      recipe: entry.recipe as unknown as {
+        id: string;
+        kcal: number;
+        protein_g: number;
+        carbs_g: number;
+        fat_g: number;
+      },
+    })
+  );
   if (insErr) return bad(`Log impossible : ${insErr.message}`);
   revalidate();
   return { ok: true };

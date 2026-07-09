@@ -46,11 +46,14 @@ export default async function ReglagesPage() {
         </div>
       </section>
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted">À venir</h2>
-        <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
-          Gestion des templates de séances — Phase 3
-        </div>
+      <section>
+        <h2 className="mb-2 text-sm font-medium text-muted">Training</h2>
+        <Link
+          href="/training/templates"
+          className="block rounded-lg border border-border bg-surface px-4 py-3 text-sm font-medium active:bg-surface-raised"
+        >
+          Gérer les templates de séances
+        </Link>
       </section>
     </main>
   );

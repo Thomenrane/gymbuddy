@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { CaretLeft } from "@phosphor-icons/react/dist/ssr";
 import { brusselsDay, isIsoDate, mondayOf, shiftDay } from "@/lib/brussels-day.mjs";
-import { aggregateShoppingList, shoppingListAsText } from "@/lib/shopping-list.mjs";
+import {
+  aggregateShoppingList,
+  shoppingListAsText,
+  shoppingListForListonic,
+} from "@/lib/shopping-list.mjs";
 import { getWeekPlan } from "@/lib/plan-server";
 import { ShoppingChecklist } from "@/components/plan/shopping-checklist";
 
@@ -24,6 +28,7 @@ export default async function CoursesPage({
   const entries = await getWeekPlan(monday);
   const items = aggregateShoppingList(entries);
   const text = shoppingListAsText(items);
+  const listonicText = shoppingListForListonic(items);
 
   return (
     <main className="space-y-4">
@@ -48,7 +53,7 @@ export default async function CoursesPage({
           Rien à acheter — la semaine n&apos;a pas encore de plan.
         </p>
       ) : (
-        <ShoppingChecklist items={items} text={text} />
+        <ShoppingChecklist items={items} text={text} listonicText={listonicText} />
       )}
     </main>
   );

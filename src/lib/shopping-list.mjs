@@ -56,6 +56,19 @@ export function aggregateShoppingList(entries) {
     );
 }
 
+/**
+ * Texte optimisé pour l'import Listonic : UN article par ligne, format
+ * « Nom qty unité » (ex. « Riz brun 140 g »), SANS en-têtes de rayon ni
+ * puces — l'app mobile Listonic parse chaque ligne en article et reconnaît
+ * quantité + unité, puis reclasse selon ses propres rayons.
+ * (Les unités « portion »/« pièce » sont conservées telles quelles.)
+ */
+export function shoppingListForListonic(items) {
+  return items
+    .map((it) => `${it.item} ${it.qty} ${it.unit}`.trim())
+    .join("\n");
+}
+
 /** Liste en texte brut copiable, groupée par rayon. */
 export function shoppingListAsText(items) {
   const byRayon = new Map();

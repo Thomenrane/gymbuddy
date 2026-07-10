@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Copy } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Copy, ShareNetwork } from "@phosphor-icons/react";
 
 type ShoppingItem = { item: string; qty: number; unit: string; rayon: string };
 
@@ -10,12 +10,49 @@ type ShoppingItem = { item: string; qty: number; unit: string; rayon: string };
 export function ShoppingChecklist({
   items,
   text,
+  listonicText,
 }: {
   items: ShoppingItem[];
   text: string;
+  // Texte 1 article/ligne optimisé pour l'import Listonic (partage/collage).
+  listonicText: string;
 }) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
+  // "idle" | "shared" | "copied" — retour visuel de l'export Listonic.
+  const [listonicState, setListonicState] = useState<"idle" | "shared" | "copied">("idle");
+  const [canShare, setCanShare] = useState(false);
+
+  // Web Share n'existe que côté client (et surtout sur mobile) : on adapte
+  // le libellé du bouton (Partager vs Copier) après montage.
+  useEffect(() => {
+    setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
+  }, []);
+
+  async function exportListonic() {
+    // Chemin mobile : partage natif → Listonic apparaît comme cible et crée
+    // les articles. L'utilisateur choisit sa liste ("Poulet curry rouge")
+    // côté Listonic. Fallback presse-papier si le partage est indispo/refusé.
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "Liste de courses", text: listonicText });
+        setListonicState("shared");
+        setTimeout(() => setListonicState("idle"), 2000);
+        return;
+      } catch (err) {
+        // Annulation utilisateur (AbortError) → ne rien faire, pas de fallback.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        // Autre erreur → on tente la copie ci-dessous.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(listonicText);
+      setListonicState("copied");
+      setTimeout(() => setListonicState("idle"), 2500);
+    } catch {
+      // presse-papier indisponible (http, permissions) — pas bloquant
+    }
+  }
 
   const byRayon = useMemo(() => {
     const map = new Map<string, ShoppingItem[]>();
@@ -46,21 +83,40 @@ export function ShoppingChecklist({
 
   return (
     <div className="space-y-4">
-      <button
-        type="button"
-        onClick={copy}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface text-sm font-medium active:bg-surface-raised"
-      >
-        {copied ? (
-          <>
-            <Check size={16} className="text-accent" aria-hidden /> Copié
-          </>
-        ) : (
-          <>
-            <Copy size={16} aria-hidden /> Copier la liste
-          </>
-        )}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={copy}
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-md border border-border bg-surface text-sm font-medium active:bg-surface-raised"
+        >
+          {copied ? (
+            <>
+              <Check size={16} className="text-accent" aria-hidden /> Copié
+            </>
+          ) : (
+            <>
+              <Copy size={16} aria-hidden /> Copier la liste
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={exportListonic}
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-primary text-sm font-semibold text-on-primary active:opacity-90"
+        >
+          {listonicState === "shared" || listonicState === "copied" ? (
+            <>
+              <Check size={16} aria-hidden />
+              {listonicState === "copied" ? "Copié — colle dans Listonic" : "Partagé"}
+            </>
+          ) : (
+            <>
+              <ShareNetwork size={16} aria-hidden />
+              {canShare ? "Vers Listonic" : "Copier pour Listonic"}
+            </>
+          )}
+        </button>
+      </div>
 
       {byRayon.map(([rayon, rows]) => (
         <section key={rayon}>

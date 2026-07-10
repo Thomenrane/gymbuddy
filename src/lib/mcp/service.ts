@@ -3,6 +3,14 @@ import { mcpDb } from "./db";
 import { brusselsDay, isIsoDate, shiftDay } from "@/lib/brussels-day.mjs";
 import { roundMacro } from "@/lib/today";
 import { oilyFishCount } from "@/lib/oily-fish.mjs";
+import {
+  poLogMacros,
+  sarahShareFromLog,
+  sarahDayTotals,
+  planEntryMacros,
+  pctOfTargets,
+  assertCoupleShare,
+} from "@/lib/couple.mjs";
 
 // ============================================================
 // Logique métier des 14 tools MCP (PRD §5).
@@ -56,11 +64,57 @@ export async function updateTargets(patch: {
   return data;
 }
 
+// ---------- partenaire (mode couple, Lot 11) ----------
+// Sarah est un PROFIL de macros (singleton id=1), pas un utilisateur.
+export async function getPartnerProfile() {
+  const { data, error } = await mcpDb()
+    .from("partner_profile")
+    .select("*")
+    .eq("id", 1)
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+export async function updatePartnerProfile(patch: {
+  name?: string;
+  kcal?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  is_active?: boolean;
+}) {
+  const clean: Record<string, unknown> = {};
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (!name) fail("name ne peut pas être vide.");
+    clean.name = name;
+  }
+  for (const k of ["kcal", "protein_g", "carbs_g", "fat_g"] as const) {
+    if (patch[k] !== undefined) {
+      const v = Number(patch[k]);
+      if (!Number.isFinite(v) || v <= 0) fail(`${k} doit être un nombre > 0.`);
+      clean[k] = v;
+    }
+  }
+  if (patch.is_active !== undefined) clean.is_active = Boolean(patch.is_active);
+  if (Object.keys(clean).length === 0) fail("Aucun champ de profil valide fourni.");
+  clean.updated_at = new Date().toISOString();
+  const { data, error } = await mcpDb()
+    .from("partner_profile")
+    .update(clean)
+    .eq("id", 1)
+    .select()
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
 // ---------- day ----------
 export async function getDay(date: string) {
   const d = assertDate(date);
   const db = mcpDb();
-  const [logs, workouts, metric, targets] = await Promise.all([
+  const [logs, workouts, metric, targets, partner] = await Promise.all([
     db
       .from("meal_logs")
       .select("*, recipe:recipes(name, code)")
@@ -72,10 +126,13 @@ export async function getDay(date: string) {
       .eq("workout_date", d),
     db.from("body_metrics").select("*").eq("metric_date", d).maybeSingle(),
     getTargets(),
+    getPartnerProfile(),
   ]);
   if (logs.error) fail(logs.error.message);
   if (workouts.error) fail(workouts.error.message);
 
+  // Les meal_logs ne stockent QUE la part du PO → totaux et tendances du PO
+  // ne comptent jamais Sarah, par construction.
   const totals = (logs.data ?? []).reduce(
     (a, l) => ({
       kcal: a.kcal + l.kcal,
@@ -85,6 +142,13 @@ export async function getDay(date: string) {
     }),
     { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
   );
+
+  // Mode couple : part de Sarah dérivée (jamais stockée) sur les logs for_two.
+  const mealLogs = (logs.data ?? []).map((l) => ({
+    ...l,
+    partner_share: sarahShareFromLog(l),
+  }));
+  const partnerTotals = sarahDayTotals(logs.data ?? []);
 
   return {
     date: d,
@@ -96,7 +160,14 @@ export async function getDay(date: string) {
       carbs_g: roundMacro(totals.carbs_g - targets.carbs_g),
       fat_g: roundMacro(totals.fat_g - targets.fat_g),
     },
-    meal_logs: logs.data,
+    meal_logs: mealLogs,
+    partner: partnerTotals
+      ? {
+          profile: partner,
+          totals: partnerTotals,
+          pct_of_targets: pctOfTargets(partnerTotals, partner),
+        }
+      : null,
     workouts: notBaseline(workouts.data ?? []),
     body_metric: metric.data ?? null,
   };
@@ -314,6 +385,8 @@ export async function logMeal(input: {
   recipe_code?: string;
   recipe_id?: string;
   portion_factor?: number;
+  for_two?: boolean;
+  po_share?: number;
   free_label?: string;
   macros?: { kcal: number; protein_g?: number; carbs_g?: number; fat_g?: number };
   notes?: string;
@@ -329,6 +402,10 @@ export async function logMeal(input: {
     const recipe = (await resolveRecipeRef(input)) as unknown as {
       id: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number;
     };
+    // Mode couple : garde-fou 0<po_share<1 + macros = part PO uniquement.
+    const forTwo = Boolean(input.for_two);
+    const poShare = assertCoupleShare(forTwo, forTwo ? input.po_share : 1);
+    const macros = poLogMacros(recipe, factor, forTwo, poShare);
     const { data, error: insErr } = await db
       .from("meal_logs")
       .insert({
@@ -336,10 +413,9 @@ export async function logMeal(input: {
         slot: input.slot,
         recipe_id: recipe.id,
         portion_factor: factor,
-        kcal: Math.round(recipe.kcal * factor),
-        protein_g: roundMacro(Number(recipe.protein_g) * factor),
-        carbs_g: roundMacro(Number(recipe.carbs_g) * factor),
-        fat_g: roundMacro(Number(recipe.fat_g) * factor),
+        for_two: forTwo,
+        po_share: poShare,
+        ...macros,
         notes: input.notes ?? null,
       })
       .select()
@@ -616,6 +692,9 @@ type PlanRow = {
   plan_date: string;
   slot: string;
   portion_factor: number | string;
+  for_two: boolean;
+  po_share: number | string;
+  total_portion: number | string;
   recipe: {
     id: string; code: string | null; name: string; kcal: number;
     protein_g: number; carbs_g: number; fat_g: number;
@@ -627,7 +706,9 @@ type PlanRow = {
 async function fetchPlanRows(start: string, end: string): Promise<PlanRow[]> {
   const { data, error } = await mcpDb()
     .from("meal_plan_entries")
-    .select(`id, plan_date, slot, portion_factor, recipe:recipes(${PLAN_RECIPE_COLS})`)
+    .select(
+      `id, plan_date, slot, portion_factor, for_two, po_share, total_portion, recipe:recipes(${PLAN_RECIPE_COLS})`
+    )
     .gte("plan_date", start)
     .lte("plan_date", end)
     .order("plan_date");
@@ -635,32 +716,50 @@ async function fetchPlanRows(start: string, end: string): Promise<PlanRow[]> {
   return (data ?? []) as unknown as PlanRow[];
 }
 
-function planDays(rows: PlanRow[], targets: { kcal: number; protein_g: number; carbs_g: number; fat_g: number }) {
+type DayTargets = { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
+const zeroMacros = () => ({ kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+const addMacros = (a: DayTargets, b: DayTargets) => ({
+  kcal: a.kcal + b.kcal,
+  protein_g: roundMacro(a.protein_g + b.protein_g),
+  carbs_g: roundMacro(a.carbs_g + b.carbs_g),
+  fat_g: roundMacro(a.fat_g + b.fat_g),
+});
+
+function planDays(
+  rows: PlanRow[],
+  targets: DayTargets,
+  partnerTargets: DayTargets
+) {
   const byDay = new Map<string, PlanRow[]>();
   for (const r of rows) byDay.set(r.plan_date, [...(byDay.get(r.plan_date) ?? []), r]);
   return [...byDay.entries()].map(([date, entries]) => {
-    const totals = entries.reduce(
-      (a, e) => {
-        const f = Number(e.portion_factor) || 1;
-        return {
-          kcal: a.kcal + Math.round((e.recipe?.kcal ?? 0) * f),
-          protein_g: roundMacro(a.protein_g + Number(e.recipe?.protein_g ?? 0) * f),
-          carbs_g: roundMacro(a.carbs_g + Number(e.recipe?.carbs_g ?? 0) * f),
-          fat_g: roundMacro(a.fat_g + Number(e.recipe?.fat_g ?? 0) * f),
-        };
-      },
-      { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
-    );
-    return {
-      date,
-      entries: entries.map((e) => ({
+    let totals = zeroMacros();
+    let partnerTotals = zeroMacros();
+    let anyForTwo = false;
+    const outEntries = entries.map((e) => {
+      const { po, sarah } = planEntryMacros(e);
+      totals = addMacros(totals, po);
+      if (sarah) {
+        anyForTwo = true;
+        partnerTotals = addMacros(partnerTotals, sarah);
+      }
+      return {
         id: e.id,
         slot: e.slot,
         portion_factor: Number(e.portion_factor),
+        for_two: Boolean(e.for_two),
+        po_share: Number(e.po_share),
+        total_portion: Number(e.total_portion),
         recipe_id: e.recipe?.id ?? null,
         recipe_code: e.recipe?.code ?? null,
         recipe_name: e.recipe?.name ?? null,
-      })),
+        po_macros: po,
+        partner_macros: sarah,
+      };
+    });
+    return {
+      date,
+      entries: outEntries,
       totals,
       delta_vs_targets: {
         kcal: totals.kcal - targets.kcal,
@@ -669,6 +768,12 @@ function planDays(rows: PlanRow[], targets: { kcal: number; protein_g: number; c
         fat_g: roundMacro(totals.fat_g - targets.fat_g),
       },
       within_5pct_kcal: Math.abs(totals.kcal - targets.kcal) <= targets.kcal * 0.05,
+      partner: anyForTwo
+        ? {
+            totals: partnerTotals,
+            pct_of_targets: pctOfTargets(partnerTotals, partnerTargets),
+          }
+        : null,
     };
   });
 }
@@ -676,12 +781,17 @@ function planDays(rows: PlanRow[], targets: { kcal: number; protein_g: number; c
 export async function getPlan(startDate: string, endDate: string) {
   const start = assertDate(startDate, "start_date");
   const end = assertDate(endDate, "end_date");
-  const [rows, targets] = await Promise.all([fetchPlanRows(start, end), getTargets()]);
+  const [rows, targets, partner] = await Promise.all([
+    fetchPlanRows(start, end),
+    getTargets(),
+    getPartnerProfile(),
+  ]);
   return {
     start_date: start,
     end_date: end,
     targets,
-    days: planDays(rows, targets),
+    partner_profile: partner,
+    days: planDays(rows, targets, partner as unknown as DayTargets),
     oily_fish_count: oilyFishCount(rows.map((r) => ({ tags: r.recipe?.tags ?? null }))),
   };
 }
@@ -692,19 +802,37 @@ export async function planMealMcp(input: {
   recipe_code?: string;
   recipe_id?: string;
   portion_factor?: number;
+  for_two?: boolean;
+  po_share?: number;
+  total_portion?: number;
 }) {
   const date = assertDate(input.date);
   if (!SLOTS.includes(input.slot)) fail(`slot invalide (${SLOTS.join("|")}).`);
-  const factor = input.portion_factor ?? 1;
+  const forTwo = Boolean(input.for_two);
+  // Couple : total_portion fait autorité (portion_factor reste 1.0, inutilisé).
+  const factor = forTwo ? 1 : input.portion_factor ?? 1;
   if (!(factor > 0 && factor <= 10)) fail("portion_factor invalide.");
+  const totalPortion = forTwo ? input.total_portion ?? 1 : 1;
+  if (!(totalPortion > 0 && totalPortion <= 10)) fail("total_portion invalide.");
+  const poShare = assertCoupleShare(forTwo, forTwo ? input.po_share : 1);
   const recipe = (await resolveRecipeRef(input, "id")) as unknown as { id: string };
   const { data, error } = await mcpDb()
     .from("meal_plan_entries")
     .upsert(
-      { plan_date: date, slot: input.slot, recipe_id: recipe.id, portion_factor: factor },
+      {
+        plan_date: date,
+        slot: input.slot,
+        recipe_id: recipe.id,
+        portion_factor: factor,
+        for_two: forTwo,
+        po_share: poShare,
+        total_portion: totalPortion,
+      },
       { onConflict: "plan_date,slot" }
     )
-    .select(`id, plan_date, slot, portion_factor, recipe:recipes(id, code, name)`)
+    .select(
+      `id, plan_date, slot, portion_factor, for_two, po_share, total_portion, recipe:recipes(id, code, name)`
+    )
     .single();
   if (error) fail(error.message);
   return data;
@@ -723,6 +851,9 @@ export async function planWeek(
     recipe_code?: string;
     recipe_id?: string;
     portion_factor?: number;
+    for_two?: boolean;
+    po_share?: number;
+    total_portion?: number;
   }[]
 ) {
   if (!entries?.length) fail("entries est vide.");
@@ -734,6 +865,12 @@ export async function planWeek(
       fail(`Entrée sans recipe_code ni recipe_id : ${e.date} / ${e.slot}.`);
     if (e.portion_factor != null && !(e.portion_factor > 0 && e.portion_factor <= 10))
       fail(`portion_factor invalide pour ${e.date}/${e.slot}.`);
+    if (e.for_two) {
+      if (e.total_portion != null && !(e.total_portion > 0 && e.total_portion <= 10))
+        fail(`total_portion invalide pour ${e.date}/${e.slot}.`);
+      // Garde-fou couple : 0 < po_share < 1 (sinon rien n'est écrit).
+      assertCoupleShare(true, e.po_share);
+    }
     const key = `${e.date}|${e.slot}`;
     if (seen.has(key)) fail(`Doublon dans le lot : ${e.date} / ${e.slot}.`);
     seen.add(key);
@@ -769,12 +906,19 @@ export async function planWeek(
   if (missing.length)
     fail(`Recettes inconnues : ${[...new Set(missing)].join(", ")} — rien n'a été écrit.`);
 
-  const rows = entries.map((e, i) => ({
-    plan_date: e.date,
-    slot: e.slot,
-    recipe_id: resolvedIds[i]!,
-    portion_factor: e.portion_factor ?? 1,
-  }));
+  const rows = entries.map((e, i) => {
+    const forTwo = Boolean(e.for_two);
+    return {
+      plan_date: e.date,
+      slot: e.slot,
+      recipe_id: resolvedIds[i]!,
+      // Couple : total_portion fait autorité, portion_factor reste 1.0.
+      portion_factor: forTwo ? 1 : e.portion_factor ?? 1,
+      for_two: forTwo,
+      po_share: assertCoupleShare(forTwo, forTwo ? e.po_share : 1),
+      total_portion: forTwo ? e.total_portion ?? 1 : 1,
+    };
+  });
   const { error: upErr } = await mcpDb()
     .from("meal_plan_entries")
     .upsert(rows, { onConflict: "plan_date,slot" });

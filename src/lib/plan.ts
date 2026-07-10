@@ -20,6 +20,9 @@ export type PlanEntry = {
   slot: Slot;
   recipe_id: string;
   portion_factor: number;
+  for_two: boolean;
+  po_share: number;
+  total_portion: number;
   notes: string | null;
   created_at: string;
   recipe: PlanRecipe | null;

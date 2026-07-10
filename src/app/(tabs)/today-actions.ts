@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isIsoDate } from "@/lib/brussels-day.mjs";
 import { SLOT_ORDER, roundMacro, type Slot } from "@/lib/today";
+import { poLogMacros, assertCoupleShare } from "@/lib/couple.mjs";
 
 export type ActionResult = { error: string } | { ok: true };
 
@@ -28,12 +29,24 @@ export async function logMealFromRecipe(input: {
   recipeId: string;
   portionFactor: number;
   notes?: string;
+  // Mode couple (Lot 11) : repas partagé avec Sarah. Les macros stockées
+  // = part du PO uniquement (recette × portion × po_share). La part de Sarah
+  // est dérivée à l'affichage, jamais stockée.
+  forTwo?: boolean;
+  poShare?: number;
 }): Promise<ActionResult> {
   const err = validDateSlot(input.date, input.slot);
   if (err) return bad(err);
   const factor = Number(input.portionFactor);
   if (!Number.isFinite(factor) || factor <= 0 || factor > 10)
     return bad("Portion invalide.");
+  const forTwo = Boolean(input.forTwo);
+  let poShare: number;
+  try {
+    poShare = assertCoupleShare(forTwo, forTwo ? input.poShare : 1);
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : "Répartition invalide.");
+  }
 
   const supabase = await createClient();
   const { data: recipe, error: rErr } = await supabase
@@ -48,10 +61,9 @@ export async function logMealFromRecipe(input: {
     slot: input.slot,
     recipe_id: input.recipeId,
     portion_factor: factor,
-    kcal: Math.round(recipe.kcal * factor),
-    protein_g: roundMacro(Number(recipe.protein_g) * factor),
-    carbs_g: roundMacro(Number(recipe.carbs_g) * factor),
-    fat_g: roundMacro(Number(recipe.fat_g) * factor),
+    for_two: forTwo,
+    po_share: poShare,
+    ...poLogMacros(recipe, factor, forTwo, poShare),
     notes: input.notes?.trim() || null,
   });
   if (error) return bad(`Log impossible : ${error.message}`);
@@ -198,5 +210,41 @@ export async function updateTargets(input: {
 
   revalidatePath("/");
   revalidatePath("/reglages");
+  return { ok: true };
+}
+
+/** Mode couple : profil de Sarah (activation + cibles macros). Singleton id=1. */
+export async function updatePartnerProfile(input: {
+  name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  is_active: boolean;
+}): Promise<ActionResult> {
+  const name = input.name.trim();
+  if (!name) return bad("Le nom du partenaire est obligatoire.");
+  const macros = [input.kcal, input.protein_g, input.carbs_g, input.fat_g];
+  if (macros.some((v) => !Number.isFinite(Number(v)) || Number(v) <= 0))
+    return bad("Les cibles du partenaire doivent être des nombres > 0.");
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("partner_profile")
+    .update({
+      name,
+      kcal: Math.round(input.kcal),
+      protein_g: Math.round(input.protein_g),
+      carbs_g: Math.round(input.carbs_g),
+      fat_g: Math.round(input.fat_g),
+      is_active: Boolean(input.is_active),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", 1);
+  if (error) return bad(`Sauvegarde impossible : ${error.message}`);
+
+  revalidatePath("/");
+  revalidatePath("/reglages");
+  revalidatePath("/plan");
   return { ok: true };
 }

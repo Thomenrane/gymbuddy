@@ -5,6 +5,8 @@
 //  - aucune conversion d'unités : "g" et "pièce" d'un même item = 2 lignes
 //  - regroupement par rayon via mapping statique par mots-clés
 
+import { shoppingFactor } from "./couple.mjs";
+
 const RAYON_KEYWORDS = [
   ["protéines", ["poulet", "dinde", "bœuf", "boeuf", "haché", "hache", "saumon", "thon", "cabillaud", "crevette", "œuf", "oeuf", "jambon", "poisson"]],
   ["frais", ["skyr", "yaourt", "fromage", "cottage", "mozzarella", "lait", "beurre", "crème", "whey"]],
@@ -32,7 +34,9 @@ const normalize = (item) => item.trim().toLowerCase();
 export function aggregateShoppingList(entries) {
   const acc = new Map(); // clé "item|unit" → {item, qty, unit}
   for (const entry of entries) {
-    const factor = Number(entry.portion_factor) || 1;
+    // Plat ENTIER : en couple, total_portion fait autorité (PO + Sarah) ;
+    // en solo, portion_factor. Les courses couvrent tout ce qui est cuisiné.
+    const factor = shoppingFactor(entry);
     for (const ing of entry.recipe?.ingredients ?? []) {
       const key = `${normalize(ing.item)}|${ing.unit}`;
       const existing = acc.get(key);

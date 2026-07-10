@@ -80,3 +80,4 @@ protocole : `CLAUDE.md`.
 | 4 | MCP (14 tools) | ✅ |
 | 6 | Planificateur (vue semaine, liste de courses, 5 tools MCP plan) | ✅ |
 | 5 | Tendances (6 visualisations, moyenne hebdo de poids) | ✅ |
+| 11 | Mode couple (profil partenaire Sarah, repas « pour deux » opt-in) | ✅ |

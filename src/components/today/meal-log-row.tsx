@@ -37,10 +37,11 @@ export function MealLogRow({ log }: { log: MealLog }) {
               <span className="ml-1.5 text-muted">×{Number(log.portion_factor)}</span>
             )}
           </span>
-          {(log.notes || !log.recipe_id) && (
+          {(log.notes || !log.recipe_id || log.for_two) && (
             <span className="block truncate text-xs text-muted">
               {[
                 !log.recipe_id ? "log libre" : null,
+                log.for_two ? `pour 2 · ta part ${Math.round(Number(log.po_share) * 100)}%` : null,
                 log.is_estimate ? "estimé" : null,
                 log.notes,
               ]

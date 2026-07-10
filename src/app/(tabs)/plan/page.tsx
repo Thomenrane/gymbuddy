@@ -9,6 +9,7 @@ import { brusselsDay, isIsoDate, mondayOf, shiftDay } from "@/lib/brussels-day.m
 import { oilyFishCount } from "@/lib/oily-fish.mjs";
 import { getWeekPlan } from "@/lib/plan-server";
 import { getPickerRecipes, getTargets } from "@/lib/today-server";
+import { getPartnerProfile } from "@/lib/partner-server";
 import { OilyFishCounter } from "@/components/trends/oily-fish-counter";
 import {
   PlanDay,
@@ -36,10 +37,11 @@ export default async function PlanPage({
   const sunday = shiftDay(monday, 6);
   const days = Array.from({ length: 7 }, (_, i) => shiftDay(monday, i));
 
-  const [entries, targets, recipes] = await Promise.all([
+  const [entries, targets, recipes, partner] = await Promise.all([
     getWeekPlan(monday),
     getTargets(),
     getPickerRecipes(),
+    getPartnerProfile(),
   ]);
 
   const picker: PlanPickerItem[] = recipes.map((r) => ({
@@ -102,7 +104,10 @@ export default async function PlanPage({
 
       <OilyFishCounter count={oilyFish} />
 
-      <PlanProvider recipes={picker}>
+      <PlanProvider
+        recipes={picker}
+        couple={partner.is_active ? { name: partner.name } : null}
+      >
         <div className="space-y-3">
           {days.map((date) => (
             <PlanDay

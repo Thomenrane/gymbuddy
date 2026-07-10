@@ -35,7 +35,9 @@ NOTE_ENC="baseline%20seed%20%E2%80%94%20poids%20de%20d%C3%A9part"
 RUN_BASE="${BASE_URL:-http://localhost:$PORT}"
 MCP_URL="${MCP_URL:-$RUN_BASE/api/mcp}"
 
-crange() { curl -s "$1" "${SRV[@]}" -H "Prefer: count=exact" -I 2>/dev/null | tr -d '\r' | sed -n 's/.*content-range: [0-9-]*\///Ip'; }
+# Total d'un endpoint (nombre après le "/" du Content-Range) — gère "0-50/51"
+# comme le cas zéro "*/0".
+crange() { curl -s "$1" "${SRV[@]}" -H "Prefer: count=exact" -I 2>/dev/null | tr -d '\r' | sed -n 's#.*content-range: [^/]*/##Ip'; }
 
 cleanup() {
   kill "${SERVER_PID:-0}" 2>/dev/null || true
@@ -84,7 +86,8 @@ else
 fi
 
 echo "-- 5. MCP RPE par série (HTTP bearer) --"
-if MCP_URL="$MCP_URL" MCP_SECRET="$MCP_SECRET" node scripts/lot12-mcp-rpe.mjs; then
+if NODE_USE_ENV_PROXY=1 NO_PROXY="localhost,127.0.0.1" no_proxy="localhost,127.0.0.1" \
+   MCP_URL="$MCP_URL" MCP_SECRET="$MCP_SECRET" node scripts/lot12-mcp-rpe.mjs; then
   ok "MCP : log/get/update rpe (voir détail ci-dessus)"
 else
   ko "MCP RPE (scripts/lot12-mcp-rpe.mjs)"

@@ -122,7 +122,7 @@ export async function getDay(date: string) {
       .order("created_at"),
     db
       .from("workouts")
-      .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, exercise:exercises(name))")
+      .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name))")
       .eq("workout_date", d),
     db.from("body_metrics").select("*").eq("metric_date", d).maybeSingle(),
     getTargets(),
@@ -488,7 +488,13 @@ export async function deleteMealLog(id: string) {
 // ---------- workouts ----------
 type WorkoutExerciseInput = {
   name: string;
-  sets: { reps?: number; weight_kg?: number | null; duration_s?: number; distance_m?: number }[];
+  sets: {
+    reps?: number;
+    weight_kg?: number | null;
+    duration_s?: number;
+    distance_m?: number;
+    rpe?: number | null; // effort perçu 1-10 (demi-points) — optionnel
+  }[];
 };
 
 /**
@@ -532,6 +538,7 @@ async function buildSetRows(workoutId: string, exercises: WorkoutExerciseInput[]
         weight_kg: s.weight_kg ?? null,
         duration_s: s.duration_s ?? null,
         distance_m: s.distance_m ?? null,
+        rpe: s.rpe ?? null,
       })
     );
   }
@@ -604,7 +611,7 @@ export async function getWorkouts(startDate: string, endDate: string) {
   const end = assertDate(endDate, "end_date");
   const { data, error } = await mcpDb()
     .from("workouts")
-    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, exercise:exercises(name))")
+    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name))")
     .gte("workout_date", start)
     .lte("workout_date", end)
     .order("workout_date");
@@ -626,13 +633,13 @@ export async function getExerciseHistory(exerciseName: string, limit = 10) {
 
   const { data: sets, error: sErr } = await db
     .from("workout_sets")
-    .select("set_number, reps, weight_kg, duration_s, distance_m, workout:workouts!inner(id, workout_date, notes)")
+    .select("set_number, reps, weight_kg, duration_s, distance_m, rpe, workout:workouts!inner(id, workout_date, notes)")
     .eq("exercise_id", exercise.id);
   if (sErr) fail(sErr.message);
 
   type Row = {
     set_number: number; reps: number | null; weight_kg: number | null;
-    duration_s: number | null; distance_m: number | null;
+    duration_s: number | null; distance_m: number | null; rpe: number | null;
     workout: { id: string; workout_date: string; notes: string | null };
   };
   const byWorkout = new Map<string, { workout_date: string; notes: string | null; sets: object[] }>();
@@ -642,7 +649,7 @@ export async function getExerciseHistory(exerciseName: string, limit = 10) {
       notes: s.workout.notes,
       sets: [],
     };
-    w.sets.push({ set_number: s.set_number, reps: s.reps, weight_kg: s.weight_kg });
+    w.sets.push({ set_number: s.set_number, reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe });
     byWorkout.set(s.workout.id, w);
   }
   const history = [...byWorkout.values()]
@@ -1207,7 +1214,7 @@ export async function updateWorkout(input: {
 
   const { data: workout, error: wErr } = await db
     .from("workouts")
-    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, exercise:exercises(name))")
+    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name))")
     .eq("id", input.id)
     .single();
   if (wErr) fail(wErr.message);

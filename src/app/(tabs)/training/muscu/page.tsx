@@ -15,12 +15,15 @@ import {
 export const dynamic = "force-dynamic";
 
 const setsToDraft = (
-  sets: { reps: number | null; weight_kg: number | null }[]
+  sets: { reps: number | null; weight_kg: number | null; rpe?: number | null }[]
 ) => ({
   assist: sets.some((s) => (Number(s.weight_kg) || 0) < 0),
   rows: sets.map((s) => ({
     reps: s.reps == null ? "" : String(s.reps),
     weight: s.weight_kg == null ? "" : String(Math.abs(Number(s.weight_kg))),
+    // Édition d'une séance passée : on ré-affiche le RPE saisi. Pré-remplissage
+    // depuis un template : pas de RPE (ressenti frais à chaque séance).
+    rpe: s.rpe == null ? "" : String(s.rpe),
   })),
 });
 
@@ -88,6 +91,7 @@ export default async function MuscuSessionPage({
             rows: Array.from({ length: tex.default_sets ?? 3 }, () => ({
               reps: tex.default_reps_min == null ? "" : String(tex.default_reps_min),
               weight: "",
+              rpe: "",
             })),
           };
       return {

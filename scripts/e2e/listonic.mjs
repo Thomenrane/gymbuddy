@@ -1,8 +1,8 @@
-// E2E : export « Vers Listonic » sur l'écran Courses.
-// Prouve, dans un vrai navigateur authentifié, que le bouton partage bien
-// le texte au format Listonic (1 article/ligne « Nom qty unité »), en
-// stubbant navigator.share pour capturer la charge utile de façon
-// déterministe (le sheet natif n'est pas pilotable en headless).
+// E2E : export « Copier pour Listonic » sur l'écran Courses.
+// Prouve, dans un vrai navigateur authentifié, que le bouton copie bien le
+// texte au format Listonic (1 article/ligne « Nom qty unité ») dans le
+// presse-papier — Listonic ne s'enregistrant pas comme cible de partage,
+// le flux repose sur le copier-coller.
 import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
 import { mondayOf } from "../../src/lib/brussels-day.mjs";
 import {
@@ -52,37 +52,28 @@ try {
 
 async function openAndAssert(expected) {
   const { browser, context, page } = await authedBrowser();
-  // Stub navigator.share AVANT tout script de page : capture le texte partagé.
-  await context.addInitScript(() => {
-    window.__shared = null;
-    navigator.share = async (data) => {
-      window.__shared = data.text;
-    };
-  });
+  // Autorise la lecture/écriture du presse-papier pour vérifier la copie.
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
 
   await page.goto(`${BASE}/plan/courses?week=${MON}`, { waitUntil: "networkidle" });
 
-  const shareBtn = page.getByRole("button", { name: /Listonic/i });
-  check("bouton d'export Listonic présent", (await shareBtn.count()) > 0);
-  check(
-    "libellé 'Vers Listonic' (navigator.share détecté)",
-    /Vers Listonic/.test(await shareBtn.first().innerText())
-  );
+  const btn = page.getByRole("button", { name: /Copier pour Listonic/i });
+  check("bouton « Copier pour Listonic » présent", (await btn.count()) > 0);
 
-  await shareBtn.first().click();
-  await page.waitForFunction(() => window.__shared !== null, { timeout: 5000 });
-  const shared = await page.evaluate(() => window.__shared);
+  await btn.first().click();
+  await page.waitForFunction(() => document.querySelector('[role="status"]'), { timeout: 5000 });
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
 
-  check("le partage envoie du texte non vide", Boolean(shared && shared.trim()));
+  check("la copie remplit le presse-papier", Boolean(clip && clip.trim()));
   check(
-    "le texte partagé est au format Listonic (= pipeline pur de l'app)",
-    shared === expected,
-    `\n    attendu:\n${expected}\n    reçu:\n${shared}`
+    "le texte copié est au format Listonic (= pipeline pur de l'app)",
+    clip === expected,
+    `\n    attendu:\n${expected}\n    reçu:\n${clip}`
   );
-  const lines = shared.split("\n");
+  const lines = clip.split("\n");
   check(
     "un article par ligne, sans en-tête de rayon",
-    lines.length >= 1 && lines.every((l) => !/^[A-ZÉ-]+$/.test(l.trim())) && !shared.includes(" : ")
+    lines.length >= 1 && lines.every((l) => !/^[A-ZÉ-]+$/.test(l.trim())) && !clip.includes(" : ")
   );
 
   return { browser };

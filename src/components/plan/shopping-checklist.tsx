@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, Copy, ShareNetwork } from "@phosphor-icons/react";
+import { useMemo, useState } from "react";
+import { Check, ClipboardText, Copy } from "@phosphor-icons/react";
 
 type ShoppingItem = { item: string; qty: number; unit: string; rayon: string };
 
@@ -19,36 +19,17 @@ export function ShoppingChecklist({
 }) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
-  // "idle" | "shared" | "copied" — retour visuel de l'export Listonic.
-  const [listonicState, setListonicState] = useState<"idle" | "shared" | "copied">("idle");
-  const [canShare, setCanShare] = useState(false);
+  const [listonicCopied, setListonicCopied] = useState(false);
 
-  // Web Share n'existe que côté client (et surtout sur mobile) : on adapte
-  // le libellé du bouton (Partager vs Copier) après montage.
-  useEffect(() => {
-    setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
-  }, []);
-
-  async function exportListonic() {
-    // Chemin mobile : partage natif → Listonic apparaît comme cible et crée
-    // les articles. L'utilisateur choisit sa liste ("Poulet curry rouge")
-    // côté Listonic. Fallback presse-papier si le partage est indispo/refusé.
-    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title: "Liste de courses", text: listonicText });
-        setListonicState("shared");
-        setTimeout(() => setListonicState("idle"), 2000);
-        return;
-      } catch (err) {
-        // Annulation utilisateur (AbortError) → ne rien faire, pas de fallback.
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        // Autre erreur → on tente la copie ci-dessous.
-      }
-    }
+  // Listonic ne s'enregistre PAS comme cible de partage de texte sur Android
+  // (absente du sheet navigator.share) → on copie le format Listonic dans le
+  // presse-papier ; l'utilisateur colle dans sa liste, où l'app mobile crée
+  // un article par ligne.
+  async function copyForListonic() {
     try {
       await navigator.clipboard.writeText(listonicText);
-      setListonicState("copied");
-      setTimeout(() => setListonicState("idle"), 2500);
+      setListonicCopied(true);
+      setTimeout(() => setListonicCopied(false), 3000);
     } catch {
       // presse-papier indisponible (http, permissions) — pas bloquant
     }
@@ -101,22 +82,26 @@ export function ShoppingChecklist({
         </button>
         <button
           type="button"
-          onClick={exportListonic}
+          onClick={copyForListonic}
           className="flex h-11 flex-1 items-center justify-center gap-2 rounded-md bg-primary text-sm font-semibold text-on-primary active:opacity-90"
         >
-          {listonicState === "shared" || listonicState === "copied" ? (
+          {listonicCopied ? (
             <>
-              <Check size={16} aria-hidden />
-              {listonicState === "copied" ? "Copié — colle dans Listonic" : "Partagé"}
+              <Check size={16} aria-hidden /> Copié !
             </>
           ) : (
             <>
-              <ShareNetwork size={16} aria-hidden />
-              {canShare ? "Vers Listonic" : "Copier pour Listonic"}
+              <ClipboardText size={16} aria-hidden /> Copier pour Listonic
             </>
           )}
         </button>
       </div>
+      {listonicCopied && (
+        <p role="status" className="-mt-2 text-xs text-muted">
+          Ouvre Listonic → ta liste « Poulet curry rouge » → colle. L&apos;app
+          crée un article par ligne.
+        </p>
+      )}
 
       {byRayon.map(([rayon, rows]) => (
         <section key={rayon}>

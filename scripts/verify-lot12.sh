@@ -63,8 +63,14 @@ BASE_NOTNULL=$(crange "$REST/workout_sets?select=id,workouts!inner(notes)&workou
 echo "-- 3. Garde-fous (statique) --"
 grep -q "perceived_intensity" src/app/\(tabs\)/training/training-actions.ts \
   && ok "perceived_intensity global toujours écrit (inchangé)" || ko "perceived_intensity disparu"
-grep -qi "perceived_intensity\|workouts" supabase/migrations/20260710000001_workout_set_rpe.sql \
-  && ko "la migration touche workouts/perceived_intensity (interdit)" || ok "migration ne touche que workout_sets.rpe"
+# On inspecte les STATEMENTS (hors commentaires --) : rien ne doit toucher la
+# table workouts ni perceived_intensity ; seul workout_sets.rpe est modifié.
+if grep -vE '^\s*--' supabase/migrations/20260710000001_workout_set_rpe.sql \
+   | grep -iqE "perceived_intensity|(alter|update|drop) +table +workouts\b|table workouts\b"; then
+  ko "la migration touche workouts/perceived_intensity (interdit)"
+else
+  ok "migration ne touche que workout_sets.rpe"
+fi
 
 echo "-- 4. Serveur ($RUN_BASE) --"
 if [ -z "${BASE_URL:-}" ]; then

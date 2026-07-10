@@ -265,7 +265,7 @@ function PlanPickerSheet({
 
         {couple && (
           <div className="rounded-md border border-border bg-surface p-2.5">
-            <label className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium">
                 Pour deux
                 <span className="block text-xs font-normal text-muted">
@@ -284,12 +284,12 @@ function PlanPickerSheet({
                 }`}
               >
                 <span
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                  className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform ${
                     forTwo ? "translate-x-6" : "translate-x-1"
                   }`}
                 />
               </button>
-            </label>
+            </div>
             {forTwo && (
               <div className="mt-3">
                 <div className="mb-1 flex justify-between text-xs">

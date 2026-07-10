@@ -43,7 +43,7 @@ export function PartnerForm({ partner }: { partner: PartnerProfile }) {
 
   return (
     <form onSubmit={save} className="space-y-3">
-      <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
         <span className="text-sm">
           <span className="block font-medium">Mode couple</span>
           <span className="block text-xs text-muted">
@@ -62,12 +62,12 @@ export function PartnerForm({ partner }: { partner: PartnerProfile }) {
           }`}
         >
           <span
-            className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+            className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform ${
               active ? "translate-x-6" : "translate-x-1"
             }`}
           />
         </button>
-      </label>
+      </div>
 
       <label className="block text-sm">
         <span className="mb-1 block text-muted">Nom du partenaire</span>

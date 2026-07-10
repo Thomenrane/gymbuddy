@@ -27,6 +27,8 @@ export type PickerItem = {
   lastLoggedAt: string | null;
 };
 
+type CoupleState = { name: string } | null;
+
 const AddLogCtx = createContext<{ open: (slot: Slot) => void } | null>(null);
 
 export function AddLogButton({ slot }: { slot: Slot }) {
@@ -46,10 +48,12 @@ export function AddLogButton({ slot }: { slot: Slot }) {
 export function TodayProvider({
   date,
   recipes,
+  couple = null,
   children,
 }: {
   date: string;
   recipes: PickerItem[];
+  couple?: CoupleState;
   children: React.ReactNode;
 }) {
   const [slot, setSlot] = useState<Slot | null>(null);
@@ -61,6 +65,7 @@ export function TodayProvider({
           slot={slot}
           date={date}
           recipes={recipes}
+          couple={couple}
           onClose={() => setSlot(null)}
         />
       )}
@@ -75,15 +80,20 @@ function AddLogSheet({
   slot,
   date,
   recipes,
+  couple,
   onClose,
 }: {
   slot: Slot;
   date: string;
   recipes: PickerItem[];
+  couple: CoupleState;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"picker" | "libre">("picker");
   const [portion, setPortion] = useState(1);
+  const [forTwo, setForTwo] = useState(false);
+  // Part du PO en mode couple (0 < poShare < 1). Défaut 50/50.
+  const [poShare, setPoShare] = useState(0.5);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -105,6 +115,9 @@ function AddLogSheet({
     });
   }, [recipes, slot, query]);
 
+  // En mode couple, les macros affichées/stockées = part du PO uniquement.
+  const share = forTwo ? poShare : 1;
+
   function pick(recipeId: string) {
     setError("");
     startTransition(async () => {
@@ -113,6 +126,8 @@ function AddLogSheet({
         slot,
         recipeId,
         portionFactor: portion,
+        forTwo,
+        poShare: forTwo ? poShare : undefined,
       });
       if ("error" in res) setError(res.error);
       else onClose();
@@ -142,6 +157,57 @@ function AddLogSheet({
             ))}
           </div>
 
+          {couple && (
+            <div className="rounded-md border border-border bg-surface p-2.5">
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium">
+                  Pour deux
+                  <span className="block text-xs font-normal text-muted">
+                    Repas partagé avec {couple.name} — on ne compte que ta part.
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={forTwo}
+                  aria-label="Repas pour deux"
+                  onClick={() => setForTwo((v) => !v)}
+                  className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                    forTwo ? "bg-primary" : "bg-border"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                      forTwo ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </label>
+              {forTwo && (
+                <div className="mt-3">
+                  <div className="mb-1 flex justify-between text-xs">
+                    <span className="font-medium text-primary">
+                      Toi {Math.round(poShare * 100)}%
+                    </span>
+                    <span className="text-muted">
+                      {couple.name} {Math.round((1 - poShare) * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0.1}
+                    max={0.9}
+                    step={0.05}
+                    value={poShare}
+                    aria-label="Répartition de ta part"
+                    onChange={(e) => setPoShare(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <label className="flex h-12 items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:border-muted">
             <MagnifyingGlass size={18} className="shrink-0 text-muted" aria-hidden />
             <input
@@ -170,12 +236,13 @@ function AddLogSheet({
                   <span className="min-w-0 truncate">{r.name}</span>
                   <span className="shrink-0 text-sm text-muted">
                     <span className="font-medium text-foreground">
-                      {portion === 1 ? r.kcal : Math.round(r.kcal * portion)}
+                      {Math.round(r.kcal * portion * share)}
                     </span>{" "}
                     kcal ·{" "}
                     <span className="text-macro-p">
-                      {Math.round(Number(r.protein_g) * portion)} P
+                      {Math.round(Number(r.protein_g) * portion * share)} P
                     </span>
+                    {forTwo && <span className="text-faint"> · ta part</span>}
                   </span>
                 </button>
               </li>

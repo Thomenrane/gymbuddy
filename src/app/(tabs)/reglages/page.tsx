@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
 import { getTargets } from "@/lib/today-server";
+import { getPartnerProfile } from "@/lib/partner-server";
 import { TargetsForm } from "@/components/settings/targets-form";
+import { PartnerForm } from "@/components/settings/partner-form";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReglagesPage() {
-  const targets = await getTargets();
+  const [targets, partner] = await Promise.all([getTargets(), getPartnerProfile()]);
 
   return (
     <main className="space-y-5">
@@ -30,6 +32,16 @@ export default async function ReglagesPage() {
       </section>
 
       <section>
+        <h2 className="mb-2 text-sm font-medium text-muted">Mode couple</h2>
+        <PartnerForm partner={partner} />
+        <p className="mt-2 text-xs text-muted">
+          {partner.name} est un profil de macros, pas un compte. Un repas « pour
+          deux » n&apos;enregistre que ta part ; la sienne est calculée à
+          l&apos;affichage et n&apos;affecte jamais tes tendances.
+        </p>
+      </section>
+
+      <section>
         <h2 className="mb-2 text-sm font-medium text-muted">
           Connecteur Claude (MCP)
         </h2>
@@ -40,8 +52,8 @@ export default async function ReglagesPage() {
           <p className="text-muted">
             Claude.ai → Settings → Connectors → Add custom connector, avec le
             bearer token <span className="font-medium">MCP_SECRET</span> (voir
-            docs/mcp-setup.md du repo). 14 tools : logs, séances, recettes,
-            résumés.
+            docs/mcp-setup.md du repo). Tools : logs, séances, recettes,
+            résumés, plan, profil partenaire (mode couple).
           </p>
         </div>
       </section>

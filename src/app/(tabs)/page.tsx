@@ -8,10 +8,12 @@ import {
   getTargets,
 } from "@/lib/today-server";
 import { getDayPlan } from "@/lib/plan-server";
+import { getPartnerProfile } from "@/lib/partner-server";
 import type { PlanSuggestionData } from "@/components/today/plan-suggestion";
 import { DayNav } from "@/components/today/day-nav";
 import { DaySwipe } from "@/components/today/day-swipe";
 import { MacroSummary } from "@/components/today/macro-summary";
+import { PartnerSummary } from "@/components/today/partner-summary";
 import { SlotSection } from "@/components/today/slot-section";
 import { WeightWidget } from "@/components/today/weight-widget";
 import { TodayProvider, type PickerItem } from "@/components/today/add-log";
@@ -27,14 +29,16 @@ export default async function AujourdhuiPage({
   const today = brusselsDay();
   const date = rawDate && isIsoDate(rawDate) && rawDate <= today ? rawDate : today;
 
-  const [targets, logs, metric, streak, recipes, planned] = await Promise.all([
-    getTargets(),
-    getDayLogs(date),
-    getBodyMetric(date),
-    getStreak(today),
-    getPickerRecipes(),
-    getDayPlan(date),
-  ]);
+  const [targets, logs, metric, streak, recipes, planned, partner] =
+    await Promise.all([
+      getTargets(),
+      getDayLogs(date),
+      getBodyMetric(date),
+      getStreak(today),
+      getPickerRecipes(),
+      getDayPlan(date),
+      getPartnerProfile(),
+    ]);
 
   const totals = dayTotals(logs);
   const suggestions = new Map<string, PlanSuggestionData>(
@@ -68,8 +72,13 @@ export default async function AujourdhuiPage({
       <main className="space-y-4">
         <DayNav date={date} streak={streak} />
         <MacroSummary totals={totals} targets={targets} />
+        {partner.is_active && <PartnerSummary logs={logs} partner={partner} />}
         <WeightWidget key={date + (metric?.id ?? "")} date={date} metric={metric} />
-        <TodayProvider date={date} recipes={picker}>
+        <TodayProvider
+          date={date}
+          recipes={picker}
+          couple={partner.is_active ? { name: partner.name } : null}
+        >
           <div className="space-y-4">
             {SLOT_ORDER.map((slot) => (
               <SlotSection

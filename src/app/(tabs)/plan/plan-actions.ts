@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isIsoDate } from "@/lib/brussels-day.mjs";
 import { mealLogFromPlan } from "@/lib/plan-log.mjs";
+import { assertCoupleShare } from "@/lib/couple.mjs";
 import { SLOT_ORDER, type Slot } from "@/lib/today";
 
 export type ActionResult = { error: string } | { ok: true };
@@ -23,11 +24,24 @@ export async function planMeal(input: {
   slot: Slot;
   recipeId: string;
   portionFactor?: number;
+  // Mode couple : total_portion fait autorité (portion_factor reste 1.0).
+  forTwo?: boolean;
+  poShare?: number;
+  totalPortion?: number;
 }): Promise<ActionResult> {
   if (!isIsoDate(input.date)) return bad("Date invalide.");
   if (!SLOT_ORDER.includes(input.slot)) return bad("Slot invalide.");
-  const factor = input.portionFactor ?? 1;
+  const forTwo = Boolean(input.forTwo);
+  const factor = forTwo ? 1 : input.portionFactor ?? 1;
   if (!(factor > 0 && factor <= 10)) return bad("Portion invalide.");
+  const totalPortion = forTwo ? input.totalPortion ?? 1 : 1;
+  if (!(totalPortion > 0 && totalPortion <= 10)) return bad("Portion totale invalide.");
+  let poShare: number;
+  try {
+    poShare = assertCoupleShare(forTwo, forTwo ? input.poShare : 1);
+  } catch (e) {
+    return bad(e instanceof Error ? e.message : "Répartition invalide.");
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("meal_plan_entries").upsert(
@@ -36,6 +50,9 @@ export async function planMeal(input: {
       slot: input.slot,
       recipe_id: input.recipeId,
       portion_factor: factor,
+      for_two: forTwo,
+      po_share: poShare,
+      total_portion: totalPortion,
     },
     { onConflict: "plan_date,slot" }
   );
@@ -44,15 +61,20 @@ export async function planMeal(input: {
   return { ok: true };
 }
 
+/**
+ * Ajuste la portion d'une entrée. En couple, c'est total_portion (plat entier)
+ * qui fait autorité ; en solo, portion_factor.
+ */
 export async function updatePlanEntry(
   id: string,
-  portionFactor: number
+  portion: number,
+  forTwo = false
 ): Promise<ActionResult> {
-  if (!(portionFactor > 0 && portionFactor <= 10)) return bad("Portion invalide.");
+  if (!(portion > 0 && portion <= 10)) return bad("Portion invalide.");
   const supabase = await createClient();
   const { error } = await supabase
     .from("meal_plan_entries")
-    .update({ portion_factor: portionFactor })
+    .update(forTwo ? { total_portion: portion } : { portion_factor: portion })
     .eq("id", id);
   if (error) return bad(error.message);
   revalidate();

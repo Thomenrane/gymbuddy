@@ -21,7 +21,10 @@ import {
   type Slot,
 } from "@/lib/today";
 import { withinTolerance, type PlanEntry } from "@/lib/plan";
+import { planEntryMacros } from "@/lib/couple.mjs";
 import type { Targets } from "@/lib/today";
+
+export type PlanCouple = { name: string } | null;
 
 export type PlanPickerItem = {
   id: string;
@@ -35,31 +38,36 @@ type PickTarget = { date: string; slot: Slot };
 const Ctx = createContext<{
   openPicker: (t: PickTarget) => void;
   openEntry: (e: PlanEntry) => void;
+  couple: PlanCouple;
 } | null>(null);
 
 export function PlanProvider({
   recipes,
+  couple = null,
   children,
 }: {
   recipes: PlanPickerItem[];
+  couple?: PlanCouple;
   children: React.ReactNode;
 }) {
   const [pickTarget, setPickTarget] = useState<PickTarget | null>(null);
   const [entry, setEntry] = useState<PlanEntry | null>(null);
 
   return (
-    <Ctx.Provider value={{ openPicker: setPickTarget, openEntry: setEntry }}>
+    <Ctx.Provider value={{ openPicker: setPickTarget, openEntry: setEntry, couple }}>
       {children}
       {pickTarget && (
         <PlanPickerSheet
           target={pickTarget}
           recipes={recipes}
+          couple={couple}
           onClose={() => setPickTarget(null)}
         />
       )}
       {entry && (
         <PlanEntrySheet
           entry={entry}
+          couple={couple}
           onClose={() => setEntry(null)}
           onReplace={() => {
             setPickTarget({ date: entry.plan_date, slot: entry.slot });
@@ -91,15 +99,18 @@ export function PlanDay({
 }) {
   const ctx = useContext(Ctx);
   const bySlot = new Map(entries.map((e) => [e.slot, e]));
+  // Totaux PO (part du PO en couple) + part de Sarah dérivée, jamais stockée.
   const totals = entries.reduce(
     (a, e) => {
-      const f = Number(e.portion_factor) || 1;
+      const { po, sarah } = planEntryMacros(e);
       return {
-        kcal: a.kcal + Math.round((e.recipe?.kcal ?? 0) * f),
-        p: a.p + Number(e.recipe?.protein_g ?? 0) * f,
+        kcal: a.kcal + po.kcal,
+        p: a.p + po.protein_g,
+        sarahKcal: a.sarahKcal + (sarah?.kcal ?? 0),
+        anyForTwo: a.anyForTwo || Boolean(sarah),
       };
     },
-    { kcal: 0, p: 0 }
+    { kcal: 0, p: 0, sarahKcal: 0, anyForTwo: false }
   );
   const kcalOk = withinTolerance(totals.kcal, targets.kcal);
 
@@ -112,27 +123,41 @@ export function PlanDay({
       <div className="mt-2 space-y-1.5">
         {MEAL_SLOTS.map((slot) => {
           const e = bySlot.get(slot);
-          return e ? (
-            <button
-              key={slot}
-              type="button"
-              onClick={() => ctx?.openEntry(e)}
-              className="flex w-full items-center justify-between gap-2 rounded-md bg-surface-raised px-3 py-2.5 text-left active:opacity-80"
-            >
-              <span className="min-w-0">
-                <span className="block text-xs text-faint">{SLOT_LABELS[slot]}</span>
-                <span className="block truncate text-sm font-medium">
-                  {e.recipe?.name ?? "?"}
-                  {Number(e.portion_factor) !== 1 && (
-                    <span className="text-muted"> ×{Number(e.portion_factor)}</span>
-                  )}
+          if (e) {
+            const { po } = planEntryMacros(e);
+            const factorLabel = e.for_two
+              ? Number(e.total_portion) !== 1
+                ? ` ×${Number(e.total_portion)}`
+                : ""
+              : Number(e.portion_factor) !== 1
+                ? ` ×${Number(e.portion_factor)}`
+                : "";
+            return (
+              <button
+                key={slot}
+                type="button"
+                onClick={() => ctx?.openEntry(e)}
+                className="flex w-full items-center justify-between gap-2 rounded-md bg-surface-raised px-3 py-2.5 text-left active:opacity-80"
+              >
+                <span className="min-w-0">
+                  <span className="block text-xs text-faint">
+                    {SLOT_LABELS[slot]}
+                    {e.for_two && (
+                      <span className="ml-1 text-primary">· pour 2</span>
+                    )}
+                  </span>
+                  <span className="block truncate text-sm font-medium">
+                    {e.recipe?.name ?? "?"}
+                    {factorLabel && <span className="text-muted">{factorLabel}</span>}
+                  </span>
                 </span>
-              </span>
-              <span className="shrink-0 text-sm text-muted">
-                {Math.round((e.recipe?.kcal ?? 0) * (Number(e.portion_factor) || 1))} kcal
-              </span>
-            </button>
-          ) : (
+                <span className="shrink-0 text-sm text-muted">
+                  {po.kcal} kcal
+                </span>
+              </button>
+            );
+          }
+          return (
             <button
               key={slot}
               type="button"
@@ -155,6 +180,11 @@ export function PlanDay({
             ({totals.kcal - targets.kcal >= 0 ? "+" : ""}
             {totals.kcal - targets.kcal}) · {Math.round(totals.p)} P
           </span>
+          {totals.anyForTwo && (
+            <span className="block text-faint">
+              part {ctx?.couple?.name ?? "partenaire"} : {Math.round(totals.sarahKcal)} kcal
+            </span>
+          )}
         </p>
       )}
     </section>
@@ -164,16 +194,23 @@ export function PlanDay({
 function PlanPickerSheet({
   target,
   recipes,
+  couple,
   onClose,
 }: {
   target: PickTarget;
   recipes: PlanPickerItem[];
+  couple: PlanCouple;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [portion, setPortion] = useState(1);
+  const [forTwo, setForTwo] = useState(false);
+  const [poShare, setPoShare] = useState(0.5);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+
+  // Affiché : part du PO. En couple, portion = portions totales cuisinées.
+  const share = forTwo ? poShare : 1;
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -190,7 +227,10 @@ function PlanPickerSheet({
         date: target.date,
         slot: target.slot,
         recipeId,
-        portionFactor: portion,
+        portionFactor: forTwo ? undefined : portion,
+        forTwo,
+        poShare: forTwo ? poShare : undefined,
+        totalPortion: forTwo ? portion : undefined,
       });
       if ("error" in res) setError(res.error);
       else onClose();
@@ -222,6 +262,59 @@ function PlanPickerSheet({
             </button>
           ))}
         </div>
+
+        {couple && (
+          <div className="rounded-md border border-border bg-surface p-2.5">
+            <label className="flex items-center justify-between gap-3">
+              <span className="text-sm font-medium">
+                Pour deux
+                <span className="block text-xs font-normal text-muted">
+                  Plat partagé avec {couple.name}. Les portions ci-dessus = plat
+                  entier ; le total du jour ne compte que ta part.
+                </span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={forTwo}
+                aria-label="Plat pour deux"
+                onClick={() => setForTwo((v) => !v)}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                  forTwo ? "bg-primary" : "bg-border"
+                }`}
+              >
+                <span
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
+                    forTwo ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </label>
+            {forTwo && (
+              <div className="mt-3">
+                <div className="mb-1 flex justify-between text-xs">
+                  <span className="font-medium text-primary">
+                    Toi {Math.round(poShare * 100)}%
+                  </span>
+                  <span className="text-muted">
+                    {couple.name} {Math.round((1 - poShare) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  value={poShare}
+                  aria-label="Répartition de ta part"
+                  onChange={(e) => setPoShare(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         <label className="flex h-12 items-center gap-2 rounded-md border border-border bg-surface px-3 focus-within:border-muted">
           <MagnifyingGlass size={18} className="shrink-0 text-muted" aria-hidden />
           <input
@@ -245,10 +338,11 @@ function PlanPickerSheet({
               >
                 <span className="min-w-0 truncate">{r.name}</span>
                 <span className="shrink-0 text-sm text-muted">
-                  {Math.round(r.kcal * portion)} kcal ·{" "}
+                  {Math.round(r.kcal * portion * share)} kcal ·{" "}
                   <span className="text-macro-p">
-                    {Math.round(Number(r.protein_g) * portion)} P
+                    {Math.round(Number(r.protein_g) * portion * share)} P
                   </span>
+                  {forTwo && <span className="text-faint"> · ta part</span>}
                 </span>
               </button>
             </li>
@@ -266,23 +360,38 @@ function PlanPickerSheet({
 
 function PlanEntrySheet({
   entry,
+  couple,
   onClose,
   onReplace,
 }: {
   entry: PlanEntry;
+  couple: PlanCouple;
   onClose: () => void;
   onReplace: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
-  const factor = Number(entry.portion_factor);
+  const forTwo = Boolean(entry.for_two);
+  // En couple, la portion réglée est le plat entier (total_portion).
+  const factor = forTwo ? Number(entry.total_portion) : Number(entry.portion_factor);
+  const poShare = Number(entry.po_share);
 
   return (
     <Sheet open onClose={onClose} title={entry.recipe?.name ?? "Entrée du plan"}>
       <div className="space-y-3">
+        {forTwo && (
+          <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
+            Pour deux —{" "}
+            <span className="font-medium text-primary">toi {Math.round(poShare * 100)}%</span> ·{" "}
+            {couple?.name ?? "partenaire"} {Math.round((1 - poShare) * 100)}%. Pour
+            changer la répartition, remplace l&apos;entrée.
+          </p>
+        )}
         <div>
-          <span className="mb-1 block text-sm text-muted">Portion</span>
+          <span className="mb-1 block text-sm text-muted">
+            {forTwo ? "Portions totales (plat entier)" : "Portion"}
+          </span>
           <div className="flex gap-1.5">
             {PORTION_FACTORS.map((f) => (
               <button
@@ -292,7 +401,7 @@ function PlanEntrySheet({
                 disabled={pending}
                 onClick={() =>
                   startTransition(async () => {
-                    const res = await updatePlanEntry(entry.id, f);
+                    const res = await updatePlanEntry(entry.id, f, forTwo);
                     if ("error" in res) setError(res.error);
                     else onClose();
                   })

@@ -56,8 +56,29 @@ const handler = createMcpHandler(
     );
 
     server.tool(
+      "get_partner_profile",
+      "Profil partenaire (mode couple) : cibles macros de Sarah + is_active. Sarah est un profil de macros, pas un compte.",
+      {},
+      jsonTool(() => svc.getPartnerProfile())
+    );
+
+    server.tool(
+      "update_partner_profile",
+      "Met à jour le profil partenaire (nom, cibles macros, activation du mode couple). Champs partiels.",
+      {
+        name: z.string().optional(),
+        kcal: z.number().optional(),
+        protein_g: z.number().optional(),
+        carbs_g: z.number().optional(),
+        fat_g: z.number().optional(),
+        is_active: z.boolean().optional().describe("Active/désactive le mode couple globalement."),
+      },
+      jsonTool((args) => svc.updatePartnerProfile(args))
+    );
+
+    server.tool(
       "get_day",
-      "Journée complète : logs repas, totaux, delta vs cibles, séances, pesée.",
+      "Journée complète : logs repas (part PO + part Sarah dérivée si repas pour deux), totaux, delta vs cibles, séances, pesée, bloc partenaire.",
       { date },
       jsonTool(({ date }) => svc.getDay(date))
     );
@@ -131,6 +152,14 @@ const handler = createMcpHandler(
         recipe_code: z.string().optional(),
         recipe_id: z.string().optional().describe("uuid de recette (alternative au code, ex. recettes sans code)"),
         portion_factor: z.number().optional(),
+        for_two: z
+          .boolean()
+          .optional()
+          .describe("Mode couple : repas partagé avec Sarah. Les macros stockées = part du PO uniquement."),
+        po_share: z
+          .number()
+          .optional()
+          .describe("Part du PO si for_two (strictement entre 0 et 1, ex. 0.5 = moitié-moitié). La part de Sarah est dérivée, jamais stockée."),
         free_label: z.string().optional(),
         macros: z
           .object({
@@ -242,6 +271,18 @@ const handler = createMcpHandler(
         recipe_code: z.string().optional(),
         recipe_id: z.string().optional().describe("uuid de recette (alternative au code)"),
         portion_factor: z.number().optional(),
+        for_two: z
+          .boolean()
+          .optional()
+          .describe("Mode couple : repas partagé avec Sarah (total_portion fait alors autorité)."),
+        po_share: z
+          .number()
+          .optional()
+          .describe("Part du PO si for_two (strictement entre 0 et 1)."),
+        total_portion: z
+          .number()
+          .optional()
+          .describe("Portions totales cuisinées si for_two (PO + Sarah). Défaut 1."),
       },
       jsonTool((args) => svc.planMealMcp(args))
     );
@@ -258,6 +299,9 @@ const handler = createMcpHandler(
               recipe_code: z.string().optional(),
               recipe_id: z.string().optional().describe("uuid de recette (alternative au code)"),
               portion_factor: z.number().optional(),
+              for_two: z.boolean().optional().describe("Mode couple (total_portion fait autorité)."),
+              po_share: z.number().optional().describe("Part du PO si for_two (0 < po_share < 1)."),
+              total_portion: z.number().optional().describe("Portions totales si for_two (PO + Sarah)."),
             })
           )
           .min(1),

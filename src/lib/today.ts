@@ -42,6 +42,8 @@ export type MealLog = {
   recipe_id: string | null;
   free_label: string | null;
   portion_factor: number;
+  for_two: boolean;
+  po_share: number;
   kcal: number;
   protein_g: number;
   carbs_g: number;

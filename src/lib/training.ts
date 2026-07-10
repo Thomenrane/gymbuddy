@@ -35,6 +35,7 @@ export type WorkoutSet = {
   weight_kg: number | null;
   duration_s: number | null;
   distance_m: number | null;
+  rpe: number | null; // effort perçu ressenti 1-10 (demi-points), null si absent
   exercise?: { name: string } | null;
 };
 

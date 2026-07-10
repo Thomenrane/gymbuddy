@@ -204,7 +204,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "log_workout",
-      "Logge une séance. Muscu : exercises[{name, sets[{reps, weight_kg}]}] — exos matchés/créés dans le catalogue (poids négatif = assistance, null = poids du corps, haltères = poids par haltère). Running : distance_km, run_type, duration_min (pace calculé).",
+      "Logge une séance. Muscu : exercises[{name, sets[{reps, weight_kg, rpe?}]}] — exos matchés/créés dans le catalogue (poids négatif = assistance, null = poids du corps, haltères = poids par haltère ; rpe = effort perçu 1-10 optionnel, à comparer au target_rpe du template). Running : distance_km, run_type, duration_min (pace calculé).",
       {
         date: date.optional(),
         type: z.enum(["muscu", "running", "padel", "autre"]),
@@ -219,6 +219,13 @@ const handler = createMcpHandler(
                   weight_kg: z.number().nullable().optional(),
                   duration_s: z.number().optional(),
                   distance_m: z.number().optional(),
+                  rpe: z
+                    .number()
+                    .min(1)
+                    .max(10)
+                    .nullable()
+                    .optional()
+                    .describe("Effort perçu 1-10 (demi-points ok), optionnel — à comparer au target_rpe."),
                 })
               ),
             })
@@ -350,6 +357,7 @@ const handler = createMcpHandler(
               weight_kg: z.number().nullable().optional(),
               duration_s: z.number().optional(),
               distance_m: z.number().optional(),
+              rpe: z.number().min(1).max(10).nullable().optional().describe("Effort perçu 1-10, optionnel"),
             })
           ),
         })

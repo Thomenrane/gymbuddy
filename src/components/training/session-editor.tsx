@@ -27,7 +27,7 @@ export type EditorExercise = {
   refSummary?: string | null;
   refDate?: string | null;
   assist: boolean; // poids saisis en assistance (stockés négatifs)
-  sets: { reps: string; weight: string }[];
+  sets: { reps: string; weight: string; rpe: string }[];
 };
 
 type CatalogItem = { id: string; name: string; note: string | null };
@@ -57,6 +57,7 @@ export function SessionEditor({
   const [exercises, setExercises] = useState(initialExercises);
   const [restored, setRestored] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [showRpe, setShowRpe] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const startedAt = useRef(Date.now());
@@ -149,6 +150,22 @@ export function SessionEditor({
       </button>
       {showHint && <p className="px-1 text-xs leading-relaxed text-muted">{PROGRESSION_HINT}</p>}
 
+      <button
+        type="button"
+        onClick={() => setShowRpe((v) => !v)}
+        className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-left text-xs text-muted"
+      >
+        <span>Échelle RPE (effort perçu, optionnel)</span>
+        {showRpe ? <CaretUp size={14} /> : <CaretDown size={14} />}
+      </button>
+      {showRpe && (
+        <p className="px-1 text-xs leading-relaxed text-muted">
+          RPE = reps en réserve. 10 = échec · 9 = 1 rep en réserve · 8 = 2 en
+          réserve (cible du programme) · 7 = 3-4 en réserve. À noter par série
+          si tu veux — jamais obligatoire.
+        </p>
+      )}
+
       <div className="space-y-4">
         {exercises.map((ex, exIndex) => (
           <section key={ex.key} className="rounded-lg border border-border bg-surface p-3">
@@ -198,18 +215,19 @@ export function SessionEditor({
             </div>
 
             <div className="mt-2 space-y-1.5">
-              <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] items-center gap-1.5 text-xs text-faint">
+              <div className="grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5 text-xs text-faint">
                 <span />
                 <span className="text-center">reps</span>
                 <span className="text-center">
-                  {ex.assist ? "assistance (kg)" : "poids (kg)"}
+                  {ex.assist ? "assist. (kg)" : "poids (kg)"}
                 </span>
+                <span className="text-center">RPE</span>
                 <span />
               </div>
               {ex.sets.map((set, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-[2rem_1fr_1fr_2.5rem] items-center gap-1.5"
+                  className="grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5"
                 >
                   <span className="text-center text-sm text-muted">{i + 1}</span>
                   <input
@@ -239,6 +257,22 @@ export function SessionEditor({
                     }
                     className={inputCls}
                   />
+                  {/* RPE ressenti optionnel : placeholder = RPE cible s'il existe.
+                      Jamais requis, ne bloque pas la validation s'il est vide. */}
+                  <input
+                    aria-label={`${ex.name} série ${i + 1} RPE ressenti (optionnel)`}
+                    inputMode="decimal"
+                    placeholder={ex.rpe ? String(ex.rpe) : "–"}
+                    value={set.rpe}
+                    onChange={(e) =>
+                      patchExercise(ex.key, {
+                        sets: ex.sets.map((s, j) =>
+                          j === i ? { ...s, rpe: e.target.value } : s
+                        ),
+                      })
+                    }
+                    className={`${inputCls} px-1 text-sm text-muted`}
+                  />
                   <IconBtn
                     label={`Supprimer la série ${i + 1}`}
                     onClick={() =>
@@ -256,11 +290,19 @@ export function SessionEditor({
             <div className="mt-2 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  const last = ex.sets.at(-1);
                   patchExercise(ex.key, {
-                    sets: [...ex.sets, ex.sets.at(-1) ?? { reps: "", weight: "" }],
-                  })
-                }
+                    // reprend reps/poids de la dernière série ; RPE remis à zéro
+                    // (ressenti frais à chaque série).
+                    sets: [
+                      ...ex.sets,
+                      last
+                        ? { reps: last.reps, weight: last.weight, rpe: "" }
+                        : { reps: "", weight: "", rpe: "" },
+                    ],
+                  });
+                }}
                 className="flex h-9 flex-1 items-center justify-center gap-1 rounded-md border border-dashed border-border text-sm text-muted active:bg-surface-raised"
               >
                 <Plus size={14} /> Série
@@ -313,9 +355,9 @@ export function SessionEditor({
                 note: item.note,
                 assist: false,
                 sets: [
-                  { reps: "", weight: "" },
-                  { reps: "", weight: "" },
-                  { reps: "", weight: "" },
+                  { reps: "", weight: "", rpe: "" },
+                  { reps: "", weight: "", rpe: "" },
+                  { reps: "", weight: "", rpe: "" },
                 ],
               },
             ]);
@@ -343,7 +385,13 @@ export function SessionEditor({
                     : ex.assist
                       ? -Math.abs(raw)
                       : raw;
-                return { reps, weight_kg: weight };
+                // RPE optionnel : hors [1,10] ou illisible → null (jamais bloquant).
+                const rpeRaw = s.rpe.trim() === "" ? null : Number(s.rpe.replace(",", "."));
+                const rpe =
+                  rpeRaw == null || Number.isNaN(rpeRaw) || rpeRaw < 1 || rpeRaw > 10
+                    ? null
+                    : rpeRaw;
+                return { reps, weight_kg: weight, rpe };
               }),
             }));
             const res = await saveWorkout({

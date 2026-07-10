@@ -10,7 +10,11 @@ export type ActionResult = { error: string } | { ok: true };
 
 const TYPES: WorkoutType[] = ["muscu", "running", "padel", "autre"];
 
-export type DraftSet = { reps: number | null; weight_kg: number | null };
+export type DraftSet = {
+  reps: number | null;
+  weight_kg: number | null;
+  rpe?: number | null; // effort perçu optionnel (1-10, demi-points) — jamais requis
+};
 export type DraftExercise = {
   exerciseId?: string;
   name: string; // pour création à la volée si exerciseId absent
@@ -115,6 +119,7 @@ export async function saveWorkout(input: {
           set_number: i + 1,
           reps: s.reps,
           weight_kg: s.weight_kg,
+          rpe: s.rpe ?? null,
         })
       );
     }

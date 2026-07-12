@@ -26,6 +26,9 @@ export type EditorExercise = {
   rest?: number | null;
   refSummary?: string | null;
   refDate?: string | null;
+  // Lot 14 : cible de poids posée par Claude (indicatif, distinct du dernier fait).
+  targetWeight?: number | null;
+  targetNote?: string | null;
   assist: boolean; // poids saisis en assistance (stockés négatifs)
   sets: { reps: string; weight: string; rpe: string }[];
 };
@@ -177,6 +180,19 @@ export function SessionEditor({
                   <p className="mt-0.5 text-xs text-muted">
                     Dernière fois : <span className="text-foreground">{ex.refSummary}</span>
                     {ex.refDate && <span className="text-faint"> · {ex.refDate}</span>}
+                  </p>
+                )}
+                {/* Lot 14 : cible de poids posée par Claude — repère de surcharge
+                    progressive, distinct du dernier fait. Affichée seulement si
+                    présente ; le champ poids réel reste pré-rempli au dernier fait. */}
+                {ex.targetWeight != null && (
+                  <p className="mt-0.5 text-xs">
+                    <span className="font-medium text-primary">
+                      Poids cible : {ex.targetWeight} kg
+                    </span>
+                    {ex.targetNote && (
+                      <span className="text-muted"> — {ex.targetNote}</span>
+                    )}
                   </p>
                 )}
                 {(ex.repRange || ex.rpe || ex.rest) && (

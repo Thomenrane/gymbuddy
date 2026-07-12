@@ -454,6 +454,23 @@ const handler = createMcpHandler(
     );
 
     server.tool(
+      "set_exercise_target",
+      "Pose/met à jour/efface la CIBLE de poids d'un exercice (prochain poids à viser, affiché en séance à côté du dernier poids fait). Match par nom sur le catalogue. target_weight_kg=null efface la cible. À poser après chaque séance selon la progression réelle (double progression : haut de fourchette atteint + RPE ≤ cible → +2,5 kg).",
+      {
+        exercise_name: z.string().describe("Nom de l'exercice (match sur le catalogue)"),
+        target_weight_kg: z
+          .number()
+          .nullable()
+          .describe("Poids cible en kg (> 0), ou null pour effacer la cible"),
+        target_weight_note: z
+          .string()
+          .optional()
+          .describe("Courte justification, ex. '+2.5kg, tu tapais le haut de fourchette'"),
+      },
+      jsonTool((args) => svc.setExerciseTarget(args))
+    );
+
+    server.tool(
       "update_workout",
       "Modifie une séance : champs simples et/ou REMPLACEMENT COMPLET des séries (exercises). Les baselines seedés sont protégés.",
       {

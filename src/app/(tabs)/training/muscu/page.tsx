@@ -34,11 +34,19 @@ export default async function MuscuSessionPage({
 }) {
   const { template: templateId, date: rawDate, edit: editId } = await searchParams;
   const date = rawDate && isIsoDate(rawDate) ? rawDate : brusselsDay();
-  const catalog = (await getExerciseCatalog()).map((e) => ({
+  const fullCatalog = await getExerciseCatalog();
+  const catalog = fullCatalog.map((e) => ({
     id: e.id,
     name: e.name,
     note: e.note,
   }));
+  // Lot 14 : cible de poids par exercice (posée par Claude), pour l'affichage.
+  const targetById = new Map(
+    fullCatalog.map((e) => [
+      e.id,
+      { weight: e.target_weight_kg, note: e.target_weight_note },
+    ])
+  );
 
   let title = "Séance vierge";
   let initialExercises: EditorExercise[] = [];
@@ -72,6 +80,8 @@ export default async function MuscuSessionPage({
         exerciseId: g[0].exercise_id,
         name: g[0].exercise?.name ?? "?",
         note: catalog.find((c) => c.id === g[0].exercise_id)?.note ?? null,
+        targetWeight: targetById.get(g[0].exercise_id)?.weight ?? null,
+        targetNote: targetById.get(g[0].exercise_id)?.note ?? null,
         assist: draft.assist,
         sets: draft.rows,
       };
@@ -107,6 +117,8 @@ export default async function MuscuSessionPage({
         rest: tex.rest_seconds,
         refSummary: last?.sets.length ? summarizeSets(last.sets) : null,
         refDate: last?.workout_date ?? null,
+        targetWeight: tex.exercise.target_weight_kg,
+        targetNote: tex.exercise.target_weight_note,
         assist: base.assist,
         sets: base.rows,
       };

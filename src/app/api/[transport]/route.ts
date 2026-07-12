@@ -37,9 +37,35 @@ const handler = createMcpHandler(
   (server) => {
     server.tool(
       "get_targets",
-      "Cibles journalières actuelles (kcal, protéines, glucides, lipides, fibres).",
+      "Cibles journalières de Florian (kcal, protéines, glucides, lipides, fibres) + ses préférences alimentaires (food_preferences).",
       {},
-      jsonTool(() => svc.getTargets())
+      jsonTool(() => svc.getTargetsMcp())
+    );
+
+    server.tool(
+      "get_food_preferences",
+      "Préférences alimentaires (goûts/aversions) par personne. person optionnel : 'florian' ou 'sarah' pour filtrer, sinon toutes. À consulter AVANT de planifier des repas pour ne jamais proposer un aliment rejeté.",
+      { person: z.string().optional().describe("'florian' | 'sarah' (filtre optionnel)") },
+      jsonTool(({ person }) => svc.getFoodPreferences(person))
+    );
+
+    server.tool(
+      "add_food_preference",
+      "Ajoute une préférence alimentaire (label libre). kind: dislike | allergy | preference.",
+      {
+        person: z.string().describe("'florian' | 'sarah'"),
+        kind: z.enum(["dislike", "allergy", "preference"]),
+        label: z.string().describe("Ex. 'poisson blanc', 'thon', 'beans', 'végétarien le midi'"),
+        notes: z.string().optional(),
+      },
+      jsonTool((args) => svc.addFoodPreference(args))
+    );
+
+    server.tool(
+      "delete_food_preference",
+      "Supprime une préférence alimentaire par id.",
+      { id: z.string() },
+      jsonTool(({ id }) => svc.deleteFoodPreference(id))
     );
 
     server.tool(
@@ -425,6 +451,23 @@ const handler = createMcpHandler(
         note: z.string().optional(),
       },
       jsonTool(({ id, ...fields }) => svc.updateExercise(id, fields))
+    );
+
+    server.tool(
+      "set_exercise_target",
+      "Pose/met à jour/efface la CIBLE de poids d'un exercice (prochain poids à viser, affiché en séance à côté du dernier poids fait). Match par nom sur le catalogue. target_weight_kg=null efface la cible. À poser après chaque séance selon la progression réelle (double progression : haut de fourchette atteint + RPE ≤ cible → +2,5 kg).",
+      {
+        exercise_name: z.string().describe("Nom de l'exercice (match sur le catalogue)"),
+        target_weight_kg: z
+          .number()
+          .nullable()
+          .describe("Poids cible en kg (> 0), ou null pour effacer la cible"),
+        target_weight_note: z
+          .string()
+          .optional()
+          .describe("Courte justification, ex. '+2.5kg, tu tapais le haut de fourchette'"),
+      },
+      jsonTool((args) => svc.setExerciseTarget(args))
     );
 
     server.tool(

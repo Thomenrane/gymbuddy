@@ -248,3 +248,39 @@ export async function updatePartnerProfile(input: {
   revalidatePath("/plan");
   return { ok: true };
 }
+
+// ---------- Préférences alimentaires (Lot 13) — labels libres ----------
+const PREF_KINDS = ["dislike", "allergy", "preference"] as const;
+
+export async function addFoodPreference(input: {
+  person: string;
+  kind: string;
+  label: string;
+  notes?: string;
+}): Promise<ActionResult> {
+  const person = input.person?.trim().toLowerCase();
+  if (!person) return bad("Personne obligatoire.");
+  if (!PREF_KINDS.includes(input.kind as (typeof PREF_KINDS)[number]))
+    return bad("Type de préférence invalide.");
+  const label = input.label?.trim();
+  if (!label) return bad("Le libellé est obligatoire.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("food_preferences").insert({
+    person,
+    kind: input.kind,
+    label,
+    notes: input.notes?.trim() || null,
+  });
+  if (error) return bad(`Ajout impossible : ${error.message}`);
+  revalidatePath("/reglages");
+  return { ok: true };
+}
+
+export async function deleteFoodPreference(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("food_preferences").delete().eq("id", id);
+  if (error) return bad(`Suppression impossible : ${error.message}`);
+  revalidatePath("/reglages");
+  return { ok: true };
+}

@@ -23,6 +23,9 @@ export type Exercise = {
   muscle_group: string | null;
   measure_type: "reps" | "duration" | "distance";
   note: string | null;
+  // Lot 14 : prochain poids à viser, posé par Claude via MCP. Null = pas de cible.
+  target_weight_kg: number | null;
+  target_weight_note: string | null;
 };
 
 export type WorkoutSet = {

@@ -73,7 +73,9 @@ export async function getPartnerProfile() {
     .eq("id", 1)
     .single();
   if (error) fail(error.message);
-  return data;
+  // Lot 13 : les préférences de Sarah accompagnent son profil (planif couple).
+  const { preferences } = await getFoodPreferences("sarah");
+  return { ...data, food_preferences: preferences };
 }
 
 export async function updatePartnerProfile(patch: {
@@ -108,6 +110,59 @@ export async function updatePartnerProfile(patch: {
     .single();
   if (error) fail(error.message);
   return data;
+}
+
+// ---------- préférences alimentaires (Lot 13) ----------
+// Source de vérité des goûts/aversions, par personne ('florian' | 'sarah').
+// Labels LIBRES ; aucun filtrage de recettes ici (Claude en tient compte).
+const PREF_KINDS = ["dislike", "allergy", "preference"];
+
+export async function getFoodPreferences(person?: string) {
+  let q = mcpDb()
+    .from("food_preferences")
+    .select("*")
+    .order("person")
+    .order("created_at");
+  if (person?.trim()) q = q.eq("person", person.trim().toLowerCase());
+  const { data, error } = await q;
+  if (error) fail(error.message);
+  return { count: (data ?? []).length, preferences: data ?? [] };
+}
+
+export async function addFoodPreference(input: {
+  person: string;
+  kind: string;
+  label: string;
+  notes?: string;
+}) {
+  const person = input.person?.trim().toLowerCase();
+  if (!person) fail("person est obligatoire.");
+  if (!PREF_KINDS.includes(input.kind)) fail(`kind invalide (${PREF_KINDS.join("|")}).`);
+  const label = input.label?.trim();
+  if (!label) fail("label est obligatoire.");
+  const { data, error } = await mcpDb()
+    .from("food_preferences")
+    .insert({ person, kind: input.kind, label, notes: input.notes?.trim() || null })
+    .select()
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+export async function deleteFoodPreference(id: string) {
+  const { error, count } = await mcpDb()
+    .from("food_preferences")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) fail(error.message);
+  if (!count) fail(`Aucune préférence avec l'id ${id}.`);
+  return { deleted: true, id };
+}
+
+/** get_targets côté MCP : cibles de Florian + ses préférences (Lot 13). */
+export async function getTargetsMcp() {
+  const [targets, prefs] = await Promise.all([getTargets(), getFoodPreferences("florian")]);
+  return { ...targets, food_preferences: prefs.preferences };
 }
 
 // ---------- day ----------
@@ -624,7 +679,7 @@ export async function getExerciseHistory(exerciseName: string, limit = 10) {
   const db = mcpDb();
   const { data: exercise, error } = await db
     .from("exercises")
-    .select("id, name, muscle_group, note")
+    .select("id, name, muscle_group, note, target_weight_kg, target_weight_note")
     .ilike("name", `%${exerciseName}%`)
     .limit(1)
     .maybeSingle();
@@ -1095,12 +1150,53 @@ export async function updateWorkoutTemplate(input: {
 export async function listExercises(query?: string) {
   let q = mcpDb()
     .from("exercises")
-    .select("id, name, muscle_group, measure_type, note")
+    .select("id, name, muscle_group, measure_type, note, target_weight_kg, target_weight_note")
     .order("name");
   if (query?.trim()) q = q.ilike("name", `%${query.trim()}%`);
   const { data, error } = await q;
   if (error) fail(error.message);
   return { count: (data ?? []).length, exercises: data ?? [] };
+}
+
+/**
+ * Lot 14 : pose/met à jour/efface (null) la cible de poids d'un exercice.
+ * Match par nom sur le catalogue (comme get_exercise_history) — ne crée JAMAIS
+ * d'exercice. La cible est posée EXCLUSIVEMENT par Claude (double progression) ;
+ * aucun calcul dans l'app.
+ */
+export async function setExerciseTarget(input: {
+  exercise_name: string;
+  target_weight_kg: number | null;
+  target_weight_note?: string | null;
+}) {
+  const name = input.exercise_name?.trim();
+  if (!name) fail("exercise_name est obligatoire.");
+  const db = mcpDb();
+  const { data: exercise, error } = await db
+    .from("exercises")
+    .select("id, name")
+    .ilike("name", `%${name}%`)
+    .limit(1)
+    .maybeSingle();
+  if (error) fail(error.message);
+  if (!exercise) fail(`Exercice introuvable : "${name}" (utilise list_exercises).`);
+
+  const weight = input.target_weight_kg;
+  if (weight != null && !(Number.isFinite(Number(weight)) && Number(weight) > 0))
+    fail("target_weight_kg doit être un nombre > 0 (ou null pour effacer la cible).");
+
+  const { data, error: upErr } = await db
+    .from("exercises")
+    .update({
+      target_weight_kg: weight == null ? null : Number(weight),
+      // note effacée avec la cible ; sinon mise à jour si fournie.
+      target_weight_note: weight == null ? null : input.target_weight_note?.trim() || null,
+    })
+    .eq("id", exercise.id)
+    .select("id, name, target_weight_kg, target_weight_note")
+    .single();
+  if (upErr) fail(upErr.message);
+  return data;
 }
 
 export async function createExercise(input: {

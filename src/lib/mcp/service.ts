@@ -73,7 +73,9 @@ export async function getPartnerProfile() {
     .eq("id", 1)
     .single();
   if (error) fail(error.message);
-  return data;
+  // Lot 13 : les préférences de Sarah accompagnent son profil (planif couple).
+  const { preferences } = await getFoodPreferences("sarah");
+  return { ...data, food_preferences: preferences };
 }
 
 export async function updatePartnerProfile(patch: {
@@ -108,6 +110,59 @@ export async function updatePartnerProfile(patch: {
     .single();
   if (error) fail(error.message);
   return data;
+}
+
+// ---------- préférences alimentaires (Lot 13) ----------
+// Source de vérité des goûts/aversions, par personne ('florian' | 'sarah').
+// Labels LIBRES ; aucun filtrage de recettes ici (Claude en tient compte).
+const PREF_KINDS = ["dislike", "allergy", "preference"];
+
+export async function getFoodPreferences(person?: string) {
+  let q = mcpDb()
+    .from("food_preferences")
+    .select("*")
+    .order("person")
+    .order("created_at");
+  if (person?.trim()) q = q.eq("person", person.trim().toLowerCase());
+  const { data, error } = await q;
+  if (error) fail(error.message);
+  return { count: (data ?? []).length, preferences: data ?? [] };
+}
+
+export async function addFoodPreference(input: {
+  person: string;
+  kind: string;
+  label: string;
+  notes?: string;
+}) {
+  const person = input.person?.trim().toLowerCase();
+  if (!person) fail("person est obligatoire.");
+  if (!PREF_KINDS.includes(input.kind)) fail(`kind invalide (${PREF_KINDS.join("|")}).`);
+  const label = input.label?.trim();
+  if (!label) fail("label est obligatoire.");
+  const { data, error } = await mcpDb()
+    .from("food_preferences")
+    .insert({ person, kind: input.kind, label, notes: input.notes?.trim() || null })
+    .select()
+    .single();
+  if (error) fail(error.message);
+  return data;
+}
+
+export async function deleteFoodPreference(id: string) {
+  const { error, count } = await mcpDb()
+    .from("food_preferences")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) fail(error.message);
+  if (!count) fail(`Aucune préférence avec l'id ${id}.`);
+  return { deleted: true, id };
+}
+
+/** get_targets côté MCP : cibles de Florian + ses préférences (Lot 13). */
+export async function getTargetsMcp() {
+  const [targets, prefs] = await Promise.all([getTargets(), getFoodPreferences("florian")]);
+  return { ...targets, food_preferences: prefs.preferences };
 }
 
 // ---------- day ----------

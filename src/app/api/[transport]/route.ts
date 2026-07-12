@@ -37,9 +37,35 @@ const handler = createMcpHandler(
   (server) => {
     server.tool(
       "get_targets",
-      "Cibles journalières actuelles (kcal, protéines, glucides, lipides, fibres).",
+      "Cibles journalières de Florian (kcal, protéines, glucides, lipides, fibres) + ses préférences alimentaires (food_preferences).",
       {},
-      jsonTool(() => svc.getTargets())
+      jsonTool(() => svc.getTargetsMcp())
+    );
+
+    server.tool(
+      "get_food_preferences",
+      "Préférences alimentaires (goûts/aversions) par personne. person optionnel : 'florian' ou 'sarah' pour filtrer, sinon toutes. À consulter AVANT de planifier des repas pour ne jamais proposer un aliment rejeté.",
+      { person: z.string().optional().describe("'florian' | 'sarah' (filtre optionnel)") },
+      jsonTool(({ person }) => svc.getFoodPreferences(person))
+    );
+
+    server.tool(
+      "add_food_preference",
+      "Ajoute une préférence alimentaire (label libre). kind: dislike | allergy | preference.",
+      {
+        person: z.string().describe("'florian' | 'sarah'"),
+        kind: z.enum(["dislike", "allergy", "preference"]),
+        label: z.string().describe("Ex. 'poisson blanc', 'thon', 'beans', 'végétarien le midi'"),
+        notes: z.string().optional(),
+      },
+      jsonTool((args) => svc.addFoodPreference(args))
+    );
+
+    server.tool(
+      "delete_food_preference",
+      "Supprime une préférence alimentaire par id.",
+      { id: z.string() },
+      jsonTool(({ id }) => svc.deleteFoodPreference(id))
     );
 
     server.tool(

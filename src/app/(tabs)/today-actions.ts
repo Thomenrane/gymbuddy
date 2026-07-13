@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isIsoDate } from "@/lib/brussels-day.mjs";
 import { SLOT_ORDER, roundMacro, type Slot } from "@/lib/today";
 import { poLogMacros, assertCoupleShare } from "@/lib/couple.mjs";
+import { isValidBarcode, type OffPer100g } from "@/lib/off-product.mjs";
 
 export type ActionResult = { error: string } | { ok: true };
 
@@ -283,4 +284,61 @@ export async function deleteFoodPreference(id: string): Promise<ActionResult> {
   if (error) return bad(`Suppression impossible : ${error.message}`);
   revalidatePath("/reglages");
   return { ok: true };
+}
+
+// ---------- Scan code-barres (Lot 16) — produit → référence ingrédients ----------
+
+/**
+ * Ajoute un produit scanné (Open Food Facts) à la référence nutritionnelle
+ * (`nutrition_ref`, basis 100g) pour que Claude (MCP) compose/vérifie les
+ * recettes avec les valeurs étiquette exactes. Upsert par (item, basis) :
+ * re-scanner le même produit met à jour la ligne. `verified` = fiche complète
+ * (les 4 macros présentes) ; incomplète → false, la routine de curation
+ * quotidienne web-vérifie et complète.
+ */
+export async function addScannedIngredient(input: {
+  ean: string;
+  name: string;
+  brand?: string | null;
+  per100g: OffPer100g;
+}): Promise<{ error: string } | { ok: true; item: string; verified: boolean }> {
+  if (!isValidBarcode(input.ean)) return { error: "Code-barres invalide." };
+  const name = input.name?.trim();
+  if (!name) return { error: "Nom du produit manquant." };
+  const clean = (v: number | null | undefined) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+  const kcal = clean(input.per100g?.kcal);
+  if (kcal === null)
+    return { error: "Fiche sans calories /100 g — complète-la sur Open Food Facts ou passe par le log libre." };
+  const p = clean(input.per100g.protein_g);
+  const g = clean(input.per100g.carbs_g);
+  const l = clean(input.per100g.fat_g);
+  const verified = p !== null && g !== null && l !== null;
+
+  // Convention de la table : item en minuscules ; marque accolée pour
+  // distinguer les produits ("skyr (danone)" ≠ "skyr").
+  const brand = input.brand?.trim();
+  const item = (
+    brand && !name.toLowerCase().includes(brand.toLowerCase())
+      ? `${name} (${brand})`
+      : name
+  ).toLowerCase();
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("nutrition_ref").upsert(
+    {
+      item,
+      basis: "100g",
+      kcal,
+      protein_g: p ?? 0,
+      carbs_g: g ?? 0,
+      fat_g: l ?? 0,
+      verified,
+      source: "off",
+      ean: input.ean,
+    },
+    { onConflict: "item,basis" }
+  );
+  if (error) return { error: `Ajout impossible : ${error.message}` };
+  return { ok: true, item, verified };
 }

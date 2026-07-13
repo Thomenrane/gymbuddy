@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Clock } from "@phosphor-icons/react/dist/ssr";
-import { getRecipe } from "@/lib/recipes-server";
+import { getNutritionRefRows, getRecipe } from "@/lib/recipes-server";
+import { checkRecipe, tablesFromRows } from "@/lib/nutrition-ref.mjs";
 import { CATEGORY_LABELS } from "@/lib/recipes";
 import { MacroBar } from "@/components/recipes/macro-bar";
 import { RecipeActions } from "@/components/recipes/recipe-actions";
+import { RecipeCheck } from "@/components/recipes/recipe-check";
+import { IngredientAssociate } from "@/components/recipes/ingredient-associate";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +19,11 @@ export default async function RecipeDetailPage({
   const { id } = await params;
   const recipe = await getRecipe(id);
   if (!recipe) notFound();
+
+  // Verdict recomposé (Lot 17) : la DB (produits scannés inclus) par-dessus
+  // le seed — même chaîne que le garde-fou MCP.
+  const refRows = await getNutritionRefRows();
+  const check = checkRecipe(recipe, { tables: tablesFromRows(refRows) });
 
   return (
     <main className="space-y-5">
@@ -84,28 +92,17 @@ export default async function RecipeDetailPage({
         )}
       </section>
 
+      <RecipeCheck recipeId={recipe.id} check={check} />
+
       <section>
         <h2 className="text-sm font-medium text-muted">
           Ingrédients
         </h2>
-        <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-surface">
-          {recipe.ingredients.map((ing, i) => (
-            <li key={i} className="flex items-baseline gap-3 px-4 py-3">
-              <span className="min-w-14 text-right font-semibold">
-                {ing.qty}
-                <span className="ml-0.5 text-xs font-normal text-muted">
-                  {ing.unit}
-                </span>
-              </span>
-              <span className="flex-1">
-                {ing.item}
-                {ing.note && (
-                  <span className="block text-sm text-muted">{ing.note}</span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <IngredientAssociate
+          recipeId={recipe.id}
+          ingredients={recipe.ingredients}
+          known={check.contributions.map((c) => c.known)}
+        />
       </section>
 
       {(recipe.steps ?? []).length > 0 && (

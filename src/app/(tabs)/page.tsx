@@ -50,6 +50,7 @@ export default async function AujourdhuiPage({
           e.slot,
           {
             entryId: e.id,
+            recipeId: e.recipe_id,
             recipeName: e.recipe!.name,
             portionFactor: factor,
             kcal: Math.round(e.recipe!.kcal * factor),

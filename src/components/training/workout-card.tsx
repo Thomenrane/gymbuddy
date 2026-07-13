@@ -38,11 +38,13 @@ export function WorkoutCard({ workout }: { workout: Workout }) {
         </span>
       </div>
       {byExercise.size > 0 && (
-        <ul className="mt-2 space-y-0.5 text-sm text-muted">
+        <ul className="mt-2 space-y-1 text-sm text-muted">
           {[...byExercise.entries()].map(([name, exSets]) => (
-            <li key={name} className="flex justify-between gap-2">
-              <span className="truncate">{name}</span>
-              <span className="shrink-0">
+            <li key={name} className="flex items-baseline justify-between gap-3">
+              {/* Nom plafonné (tronqué au-delà) ; le résumé prend le reste et
+                  s'enroule à droite au lieu de déborder de la carte. */}
+              <span className="max-w-[45%] shrink-0 truncate">{name}</span>
+              <span className="min-w-0 flex-1 break-words text-right">
                 {summarizeSets(
                   exSets.map((s) => ({
                     set_number: s.set_number,

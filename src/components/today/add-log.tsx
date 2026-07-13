@@ -7,8 +7,9 @@ import {
   useState,
   useTransition,
 } from "react";
-import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
+import { Barcode, MagnifyingGlass, Plus } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
+import { BarcodeScan } from "@/components/today/barcode-scan";
 import { logFreeMeal, logMealFromRecipe } from "@/app/(tabs)/today-actions";
 import {
   FREE_LOG_PRESETS,
@@ -89,7 +90,7 @@ function AddLogSheet({
   couple: CoupleState;
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<"picker" | "libre">("picker");
+  const [mode, setMode] = useState<"picker" | "libre" | "scan">("picker");
   const [portion, setPortion] = useState(1);
   const [forTwo, setForTwo] = useState(false);
   // Part du PO en mode couple (0 < poShare < 1). Défaut 50/50.
@@ -254,14 +255,31 @@ function AddLogSheet({
             )}
           </ul>
 
-          <button
-            type="button"
-            onClick={() => setMode("libre")}
-            className="h-11 w-full rounded-md border border-border bg-surface text-sm font-medium"
-          >
-            Log libre (resto, plat non répertorié…)
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("libre")}
+              className="h-11 flex-[3] rounded-md border border-border bg-surface text-sm font-medium"
+            >
+              Log libre (resto…)
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("scan")}
+              className="flex h-11 flex-[2] items-center justify-center gap-1.5 rounded-md border border-border bg-surface text-sm font-medium"
+            >
+              <Barcode size={16} aria-hidden />
+              Scanner
+            </button>
+          </div>
         </div>
+      ) : mode === "scan" ? (
+        <BarcodeScan
+          date={date}
+          slot={slot}
+          onBack={() => setMode("picker")}
+          onDone={onClose}
+        />
       ) : (
         <FreeLogForm
           date={date}

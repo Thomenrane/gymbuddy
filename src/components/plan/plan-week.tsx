@@ -7,7 +7,8 @@ import {
   useState,
   useTransition,
 } from "react";
-import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
+import Link from "next/link";
+import { ArrowSquareOut, MagnifyingGlass, Plus } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
 import {
   deletePlanEntry,
@@ -18,6 +19,7 @@ import {
   PORTION_FACTORS,
   SLOT_LABELS,
   MEAL_SLOTS,
+  recipeHref,
   type Slot,
 } from "@/lib/today";
 import { withinTolerance, type PlanEntry } from "@/lib/plan";
@@ -418,6 +420,18 @@ function PlanEntrySheet({
           </div>
         </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {/* Lot 15 : accès à la fiche recette (ingrédients, étapes) — même fiche
+            que l'onglet Recettes et l'écran Aujourd'hui. Action principale : on
+            ouvre le plan surtout pour cuisiner. */}
+        {recipeHref(entry) && (
+          <Link
+            href={recipeHref(entry)!}
+            className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-3 text-sm font-medium active:bg-surface-raised"
+          >
+            <span>Voir la recette</span>
+            <ArrowSquareOut size={16} aria-hidden className="text-muted" />
+          </Link>
+        )}
         <button
           type="button"
           onClick={onReplace}

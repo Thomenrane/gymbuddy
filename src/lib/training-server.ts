@@ -36,7 +36,7 @@ export async function getWorkout(id: string): Promise<Workout | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("workouts")
-    .select("*, workout_sets(*, exercise:exercises(name))")
+    .select("*, workout_sets(*, exercise:exercises(name)), exercise_notes:workout_exercise_notes(exercise_id, note)")
     .eq("id", id)
     .maybeSingle();
   return data as Workout | null;

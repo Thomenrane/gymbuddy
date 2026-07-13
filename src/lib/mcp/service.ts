@@ -668,6 +668,10 @@ export async function deleteMealLog(id: string) {
 // ---------- workouts ----------
 type WorkoutExerciseInput = {
   name: string;
+  // Lot 18 : contexte qualitatif du mouvement ce jour-là ("assistance -14 pour
+  // tenir propre"). Facultative, jamais bloquante ; DISTINCTE de la note de
+  // séance globale (workouts.notes). Pas de note par série (sur-granularité).
+  note?: string | null;
   sets: {
     reps?: number;
     weight_kg?: number | null;
@@ -705,9 +709,13 @@ async function matchOrCreateExercise(
 async function buildSetRows(workoutId: string, exercises: WorkoutExerciseInput[]) {
   const created: string[] = [];
   const rows: object[] = [];
+  // Lot 18 : une entrée par exercice de l'input (exercise_id résolu + note
+  // éventuelle) — les appelants en tirent les workout_exercise_notes.
+  const entries: { exercise_id: string; note: string | null | undefined }[] = [];
   for (const [pos, ex] of exercises.entries()) {
     const match = await matchOrCreateExercise(ex.name);
     if (match.created) created.push(ex.name);
+    entries.push({ exercise_id: match.id, note: ex.note });
     ex.sets.forEach((s, i) =>
       rows.push({
         workout_id: workoutId,
@@ -722,14 +730,26 @@ async function buildSetRows(workoutId: string, exercises: WorkoutExerciseInput[]
       })
     );
   }
-  return { rows, created };
+  return { rows, created, entries };
+}
+
+/** Lot 18 : écrit les notes par exercice d'une séance (une ligne par exo noté). */
+async function insertExerciseNotes(
+  workoutId: string,
+  notes: { exercise_id: string; note: string }[]
+) {
+  if (!notes.length) return;
+  const { error } = await mcpDb().from("workout_exercise_notes").insert(
+    notes.map((n) => ({ workout_id: workoutId, exercise_id: n.exercise_id, note: n.note }))
+  );
+  if (error) fail(error.message);
 }
 
 export async function logWorkout(input: {
   date?: string;
   type: string;
   template_name?: string;
-  exercises?: { name: string; sets: { reps?: number; weight_kg?: number | null; duration_s?: number; distance_m?: number }[] }[];
+  exercises?: WorkoutExerciseInput[];
   distance_km?: number;
   run_type?: string;
   duration_min?: number;
@@ -766,7 +786,7 @@ export async function logWorkout(input: {
     .single();
   if (error) fail(error.message);
 
-  const { rows: sets, created: createdExercises } = await buildSetRows(
+  const { rows: sets, created: createdExercises, entries } = await buildSetRows(
     workout.id,
     input.exercises ?? []
   );
@@ -774,6 +794,13 @@ export async function logWorkout(input: {
     const { error: sErr } = await db.from("workout_sets").insert(sets);
     if (sErr) fail(sErr.message);
   }
+  // Lot 18 : note par exercice — seulement là où il y en a une (jamais requise).
+  await insertExerciseNotes(
+    workout.id,
+    entries.flatMap((e) =>
+      e.note?.trim() ? [{ exercise_id: e.exercise_id, note: e.note.trim() }] : []
+    )
+  );
 
   return {
     workout,
@@ -791,12 +818,19 @@ export async function getWorkouts(startDate: string, endDate: string) {
   const end = assertDate(endDate, "end_date");
   const { data, error } = await mcpDb()
     .from("workouts")
-    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name))")
+    .select(
+      "*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name)), " +
+        // Lot 18 : notes par exercice (contexte qualitatif), à lire AVANT
+        // d'interpréter les chiffres bruts. Distinctes de workouts.notes.
+        "exercise_notes:workout_exercise_notes(note, exercise:exercises(name))"
+    )
     .gte("workout_date", start)
     .lte("workout_date", end)
     .order("workout_date");
   if (error) fail(error.message);
-  const workouts = notBaseline(data ?? []);
+  // Cast : le select concaténé (alias exercise_notes) échappe à l'inférence
+  // de types de supabase-js — la forme réelle reste { notes, ... }.
+  const workouts = notBaseline((data ?? []) as unknown as { notes?: string | null }[]);
   return { count: workouts.length, workouts };
 }
 
@@ -817,16 +851,29 @@ export async function getExerciseHistory(exerciseName: string, limit = 10) {
     .eq("exercise_id", exercise.id);
   if (sErr) fail(sErr.message);
 
+  // Lot 18 : la note d'exercice voyage avec l'exercice dans le temps — quand
+  // Claude lit l'historique des tractions, il voit "assistance -14 pour tenir
+  // propre" pile au bon endroit, pas noyée dans la note de séance.
+  const { data: exNotes, error: nErr } = await db
+    .from("workout_exercise_notes")
+    .select("workout_id, note")
+    .eq("exercise_id", exercise.id);
+  if (nErr) fail(nErr.message);
+  const noteByWorkout = new Map(
+    (exNotes ?? []).map((n) => [n.workout_id as string, n.note as string])
+  );
+
   type Row = {
     set_number: number; reps: number | null; weight_kg: number | null;
     duration_s: number | null; distance_m: number | null; rpe: number | null;
     workout: { id: string; workout_date: string; notes: string | null };
   };
-  const byWorkout = new Map<string, { workout_date: string; notes: string | null; sets: object[] }>();
+  const byWorkout = new Map<string, { workout_date: string; notes: string | null; exercise_note: string | null; sets: object[] }>();
   for (const s of (sets ?? []) as unknown as Row[]) {
     const w = byWorkout.get(s.workout.id) ?? {
       workout_date: s.workout.workout_date,
       notes: s.workout.notes,
+      exercise_note: noteByWorkout.get(s.workout.id) ?? null,
       sets: [],
     };
     w.sets.push({ set_number: s.set_number, reps: s.reps, weight_kg: s.weight_kg, rpe: s.rpe });
@@ -1418,6 +1465,17 @@ export async function updateWorkout(input: {
   let setsCreated = 0;
   let created: string[] = [];
   if (input.exercises !== undefined) {
+    // Lot 18 : notes existantes AVANT remplacement — note omise (undefined)
+    // sur un exercice = préservée ; null/"" = effacée ; string = remplacée.
+    const { data: oldNotes, error: onErr } = await db
+      .from("workout_exercise_notes")
+      .select("exercise_id, note")
+      .eq("workout_id", input.id);
+    if (onErr) fail(onErr.message);
+    const oldByExercise = new Map(
+      (oldNotes ?? []).map((n) => [n.exercise_id as string, n.note as string])
+    );
+
     // Remplacement complet des séries de CETTE séance uniquement
     const { error: delErr } = await db
       .from("workout_sets")
@@ -1431,11 +1489,30 @@ export async function updateWorkout(input: {
       if (insErr) fail(insErr.message);
     }
     setsCreated = built.rows.length;
+
+    const { error: delNotesErr } = await db
+      .from("workout_exercise_notes")
+      .delete()
+      .eq("workout_id", input.id);
+    if (delNotesErr) fail(delNotesErr.message);
+    const nextNotes = new Map<string, string>();
+    for (const e of built.entries) {
+      const note = e.note === undefined ? oldByExercise.get(e.exercise_id) : e.note;
+      if (note?.trim()) nextNotes.set(e.exercise_id, note.trim());
+      else nextNotes.delete(e.exercise_id);
+    }
+    await insertExerciseNotes(
+      input.id,
+      [...nextNotes.entries()].map(([exercise_id, note]) => ({ exercise_id, note }))
+    );
   }
 
   const { data: workout, error: wErr } = await db
     .from("workouts")
-    .select("*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name))")
+    .select(
+      "*, workout_sets(position, set_number, reps, weight_kg, duration_s, distance_m, rpe, exercise:exercises(name)), " +
+        "exercise_notes:workout_exercise_notes(note, exercise:exercises(name))"
+    )
     .eq("id", input.id)
     .single();
   if (wErr) fail(wErr.message);

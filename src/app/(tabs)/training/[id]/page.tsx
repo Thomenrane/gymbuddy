@@ -17,6 +17,10 @@ export default async function WorkoutDetailPage({
   const workout = await getWorkout(id);
   if (!workout) notFound();
 
+  // Lot 18 : note par exercice (contexte qualitatif), affichée sous ses séries.
+  const noteByExercise = new Map(
+    (workout.exercise_notes ?? []).map((n) => [n.exercise_id, n.note])
+  );
   const byExercise = new Map<string, WorkoutSet[]>();
   for (const s of [...(workout.workout_sets ?? [])].sort(
     (a, b) => a.position - b.position || a.set_number - b.set_number
@@ -75,6 +79,11 @@ export default async function WorkoutDetailPage({
                   </li>
                 ))}
               </ul>
+              {noteByExercise.get(sets[0]?.exercise_id) && (
+                <p className="mt-2 rounded-md bg-surface-raised px-2.5 py-1.5 text-sm text-muted">
+                  {noteByExercise.get(sets[0]?.exercise_id)}
+                </p>
+              )}
             </div>
           ))}
         </section>

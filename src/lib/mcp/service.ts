@@ -3,6 +3,7 @@ import { mcpDb } from "./db";
 import { brusselsDay, isIsoDate, shiftDay } from "@/lib/brussels-day.mjs";
 import { roundMacro } from "@/lib/today";
 import { oilyFishCount } from "@/lib/oily-fish.mjs";
+import { checkRecipe, tablesFromRows } from "@/lib/nutrition-ref.mjs";
 import {
   poLogMacros,
   sarahShareFromLog,
@@ -371,7 +372,9 @@ export async function addRecipe(input: RecipeInput & { code?: string }) {
     .select()
     .single();
   if (error) fail(error.message);
-  return data;
+  // Backstop macros : recompose vs référence et renvoie le verdict (WARN, jamais
+  // REJECT — la recette est déjà écrite ; le verdict guide la correction).
+  return { ...data, macro_check: await macroCheckFor(data) };
 }
 
 export async function updateRecipe(
@@ -399,7 +402,129 @@ export async function updateRecipe(
     .select()
     .single();
   if (error) fail(error.message);
+  // Backstop macros (idem add_recipe) : recompose vs référence, verdict WARN.
+  return { ...data, macro_check: await macroCheckFor(data) };
+}
+
+// ---------- référence nutritionnelle en base (garde-fou macros MCP) ----------
+// La table `nutrition_ref` (seedée depuis la table statique) est la source de
+// vérité exposée au connecteur. La recompose fusionne la DB par-dessus le seed
+// statique — la DB fait autorité, le seed reste le repli si la table n'existe
+// pas encore (migration non appliquée).
+const REF_BASIS = ["100g", "100ml", "piece", "portion"];
+
+async function nutritionTables() {
+  const { data, error } = await mcpDb()
+    .from("nutrition_ref")
+    .select("item, basis, kcal, protein_g, carbs_g, fat_g");
+  // error = table absente (migration non appliquée) → repli sur le seed statique.
+  return tablesFromRows(error ? [] : data ?? []);
+}
+
+type MacroRecipe = {
+  kcal: number | string;
+  protein_g: number | string;
+  carbs_g: number | string;
+  fat_g: number | string;
+  ingredients: { item: string; qty: number; unit: string }[] | null;
+};
+
+/** Recompose une recette déjà écrite ; ne jette jamais (le backstop est advisory). */
+async function macroCheckFor(recipe: MacroRecipe) {
+  try {
+    const ingredients = recipe.ingredients;
+    if (!Array.isArray(ingredients) || !ingredients.length) return null;
+    const tables = await nutritionTables();
+    return checkRecipe({ ...recipe, ingredients }, { tables });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * check_recipe_macros : recompose une recette AVANT encodage et rend le verdict
+ * gradué (ok | warn | warn_high | review) + le détail par ingrédient. À appeler
+ * systématiquement avant add_recipe. Ne bloque rien : c'est un contrôle.
+ */
+export async function checkRecipeMacros(input: {
+  name?: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  ingredients: { item: string; qty: number; unit: string }[];
+}) {
+  if (!input.ingredients?.length) fail("ingredients est obligatoire (au moins 1).");
+  const tables = await nutritionTables();
+  const result = checkRecipe(input, { tables });
+  return { name: input.name ?? null, ...result };
+}
+
+/**
+ * add_ingredient_ref : ajoute un ingrédient ABSENT de la table, flaggé
+ * verified=false ('à vérifier', source='claude'). L'agent web-vérifie ensuite
+ * la vraie valeur CIQUAL et bascule verified=true. Refuse un doublon (item, basis).
+ */
+export async function addIngredientRef(input: {
+  item: string;
+  basis: string;
+  kcal: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+}) {
+  const item = input.item?.trim().toLowerCase();
+  if (!item) fail("item est obligatoire.");
+  if (!REF_BASIS.includes(input.basis))
+    fail(`basis invalide (${REF_BASIS.join("|")}).`);
+  const num = (v: number | undefined, k: string) => {
+    const n = Number(v ?? 0);
+    if (!Number.isFinite(n) || n < 0) fail(`${k} doit être un nombre ≥ 0.`);
+    return n;
+  };
+  const row = {
+    item,
+    basis: input.basis,
+    kcal: num(input.kcal, "kcal"),
+    protein_g: num(input.protein_g, "protein_g"),
+    carbs_g: num(input.carbs_g, "carbs_g"),
+    fat_g: num(input.fat_g, "fat_g"),
+    verified: false,
+    source: "claude",
+  };
+  const { data, error } = await mcpDb()
+    .from("nutrition_ref")
+    .insert(row)
+    .select()
+    .single();
+  if (error) {
+    if (/duplicate|unique/i.test(error.message))
+      fail(`"${item}" (${input.basis}) est déjà dans la table de référence — utilise list_ingredient_refs.`);
+    fail(error.message);
+  }
   return data;
+}
+
+/**
+ * list_ingredient_refs : consulte la table de référence. verified=false pour ne
+ * lister que les ingrédients « à vérifier » (curation agent).
+ */
+export async function listIngredientRefs(params: { verified?: boolean; query?: string } = {}) {
+  let q = mcpDb()
+    .from("nutrition_ref")
+    .select("id, item, basis, kcal, protein_g, carbs_g, fat_g, verified, source, created_at")
+    .order("verified")
+    .order("item");
+  if (params.verified !== undefined) q = q.eq("verified", params.verified);
+  if (params.query?.trim()) q = q.ilike("item", `%${params.query.trim()}%`);
+  const { data, error } = await q;
+  if (error) fail(error.message);
+  const rows = data ?? [];
+  return {
+    count: rows.length,
+    unverified_count: rows.filter((r) => !r.verified).length,
+    ingredients: rows,
+  };
 }
 
 // ---------- résolution de recette par code OU id (lot 9) ----------

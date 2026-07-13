@@ -125,48 +125,101 @@ export const PER_PORTION = {
   "cannelle": [2, 0.1, 0.5, 0],
 };
 
+// Tables par défaut = le SEED de la base nutrition_ref (source de vérité MCP).
+// La recompose accepte des tables passées en paramètre (reste testable, et
+// permet au serveur MCP de brancher la table DB par-dessus ce seed).
+export const DEFAULT_TABLES = {
+  g: PER_100G,      // unités g/kg  → /100 g
+  ml: PER_100ML,    // unités ml/cl/l → /100 ml
+  piece: PER_PIECE, // unité pièce  → par pièce
+  portion: PER_PORTION, // unité portion → par portion
+};
+
+// basis de la table DB → clé des tables ci-dessus.
+export const BASIS_KEY = { "100g": "g", "100ml": "ml", piece: "piece", portion: "portion" };
+
+/**
+ * Fusionne des lignes de la table DB `nutrition_ref` par-dessus un seed.
+ * Une ligne DB (item, basis, macros) écrase/étend l'entrée du seed → la DB
+ * fait autorité, le seed sert de repli quand la table n'existe pas encore.
+ * @param {{item:string, basis:string, kcal:number, protein_g:number, carbs_g:number, fat_g:number}[]} rows
+ */
+export function tablesFromRows(rows = [], base = DEFAULT_TABLES) {
+  const t = { g: { ...base.g }, ml: { ...base.ml }, piece: { ...base.piece }, portion: { ...base.portion } };
+  for (const r of rows) {
+    const key = BASIS_KEY[r.basis];
+    if (!key) continue;
+    t[key][String(r.item).toLowerCase().trim()] = [
+      Number(r.kcal), Number(r.protein_g), Number(r.carbs_g), Number(r.fat_g),
+    ];
+  }
+  return t;
+}
+
+// Libellés lisibles du verdict (verdict explicite, jamais noyé — exigence
+// Claude.ai) : warn laisse passer mais signale, warn_high = probable erreur.
+export const VERDICT_LABEL = {
+  ok: "ok — macros cohérentes (écart kcal dans la tolérance)",
+  warn: "à revérifier — écart kcal > tolérance (probable sous/sur-estimation)",
+  warn_high: "probablement une erreur — écart kcal très élevé",
+  review: "ingrédient(s) non référencé(s) — valeur peut-être manquante dans la table",
+};
+
 const round = (n) => Math.round(n * 10) / 10;
 
-function refFor(unit, name) {
-  if (unit === "g" || unit === "kg") return { ref: PER_100G[name], per: 100, scale: unit === "kg" ? 1000 : 1 };
+function refFor(unit, name, tables) {
+  if (unit === "g" || unit === "kg") return { ref: tables.g[name], per: 100, scale: unit === "kg" ? 1000 : 1 };
   if (unit === "ml" || unit === "cl" || unit === "l")
-    return { ref: PER_100ML[name], per: 100, scale: unit === "cl" ? 10 : unit === "l" ? 1000 : 1 };
-  if (unit === "pièce" || unit === "piece") return { ref: PER_PIECE[name], per: 1, scale: 1 };
-  if (unit === "portion") return { ref: PER_PORTION[name], per: 1, scale: 1 };
+    return { ref: tables.ml[name], per: 100, scale: unit === "cl" ? 10 : unit === "l" ? 1000 : 1 };
+  if (unit === "pièce" || unit === "piece") return { ref: tables.piece[name], per: 1, scale: 1 };
+  if (unit === "portion") return { ref: tables.portion[name], per: 1, scale: 1 };
   return { ref: undefined, per: 1, scale: 1 };
 }
 
 /**
- * Recompose les macros à partir des ingrédients.
+ * Recompose les macros à partir des ingrédients, avec le DÉTAIL par ingrédient
+ * (contribution de chacun) pour corriger l'ingrédient fautif, pas à l'aveugle.
  * @param {{item:string, qty:number, unit:string}[]} ingredients
- * @returns {{ computed:{kcal,protein_g,carbs_g,fat_g}, unknown:string[] }}
+ * @param {typeof DEFAULT_TABLES} tables
+ * @returns {{ computed:{kcal,protein_g,carbs_g,fat_g}, unknown:string[], contributions:object[] }}
  */
-export function computeMacros(ingredients = []) {
+export function computeMacros(ingredients = [], tables = DEFAULT_TABLES) {
   let k = 0, p = 0, c = 0, f = 0;
   const unknown = [];
+  const contributions = [];
   for (const i of ingredients) {
     const name = String(i.item ?? "").toLowerCase().trim();
-    const { ref, per, scale } = refFor(i.unit, name);
-    if (!ref) { unknown.push(`${i.item} [${i.unit}]`); continue; }
+    const { ref, per, scale } = refFor(i.unit, name, tables);
+    if (!ref) {
+      unknown.push(`${i.item} [${i.unit}]`);
+      contributions.push({ item: i.item, qty: Number(i.qty), unit: i.unit, known: false, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+      continue;
+    }
     const factor = (Number(i.qty) * scale) / per;
-    k += ref[0] * factor; p += ref[1] * factor; c += ref[2] * factor; f += ref[3] * factor;
+    const ck = ref[0] * factor, cp = ref[1] * factor, cc = ref[2] * factor, cf = ref[3] * factor;
+    k += ck; p += cp; c += cc; f += cf;
+    contributions.push({ item: i.item, qty: Number(i.qty), unit: i.unit, known: true, kcal: Math.round(ck), protein_g: round(cp), carbs_g: round(cc), fat_g: round(cf) });
   }
   return {
     computed: { kcal: Math.round(k), protein_g: round(p), carbs_g: round(c), fat_g: round(f) },
     unknown,
+    contributions,
   };
 }
 
 /**
- * Verdict de contrôle d'une recette avant encodage.
- * - "off"    : tous ingrédients connus ET écart kcal > tolérance → CORRIGER.
- * - "review" : au moins un ingrédient inconnu → web-vérifier + étendre la table.
- * - "ok"     : tous connus et dans la tolérance.
+ * Verdict de contrôle d'une recette avant encodage (garde-fou GRADUÉ).
+ * - "review"    : au moins un ingrédient inconnu → web-vérifier + étendre la table.
+ * - "warn_high" : tous connus, écart kcal > highPct → probablement une erreur.
+ * - "warn"      : tous connus, écart kcal entre tolerancePct et highPct → à revérifier.
+ * - "ok"        : tous connus et dans la tolérance.
+ * Aucun verdict ne BLOQUE l'encodage (WARN, pas REJECT — contrôle éditorial) ;
+ * le verdict est renvoyé explicitement pour ne jamais être ignoré.
  * @param {{kcal,protein_g,carbs_g,fat_g,ingredients}} recipe
- * @param {{tolerancePct?:number}} opts
+ * @param {{tolerancePct?:number, highPct?:number, tables?:typeof DEFAULT_TABLES}} opts
  */
-export function checkRecipe(recipe, { tolerancePct = 10 } = {}) {
-  const { computed, unknown } = computeMacros(recipe.ingredients);
+export function checkRecipe(recipe, { tolerancePct = 10, highPct = 25, tables = DEFAULT_TABLES } = {}) {
+  const { computed, unknown, contributions } = computeMacros(recipe.ingredients, tables);
   const claimed = {
     kcal: Number(recipe.kcal),
     protein_g: Number(recipe.protein_g),
@@ -182,7 +235,8 @@ export function checkRecipe(recipe, { tolerancePct = 10 } = {}) {
   };
   let verdict;
   if (unknown.length) verdict = "review";
-  else if (Math.abs(deltaPct.kcal) > tolerancePct) verdict = "off";
+  else if (Math.abs(deltaPct.kcal) > highPct) verdict = "warn_high";
+  else if (Math.abs(deltaPct.kcal) > tolerancePct) verdict = "warn";
   else verdict = "ok";
-  return { verdict, claimed, computed, deltaPct, unknown, tolerancePct };
+  return { verdict, label: VERDICT_LABEL[verdict], claimed, computed, deltaPct, unknown, contributions, tolerancePct, highPct };
 }

@@ -129,7 +129,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "add_recipe",
-      "Ajoute une recette (source='claude'). Ingrédients quantifiés obligatoires. code optionnel (erreur s'il est déjà pris) — non requis : la recette reste planifiable/loggable par recipe_id.",
+      "Ajoute une recette (source='claude'). Ingrédients quantifiés obligatoires. code optionnel (erreur s'il est déjà pris) — non requis : la recette reste planifiable/loggable par recipe_id. Renvoie un macro_check (verdict recomposé vs la table de référence) : APPELLE check_recipe_macros AVANT pour corriger, ce champ est le filet de sécurité.",
       {
         name: z.string(),
         category,
@@ -149,7 +149,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "update_recipe",
-      "Modifie une recette existante (champs partiels). Ne réécrit jamais les logs passés. code optionnel : attribue/modifie le code (unique ; \"\" le retire).",
+      "Modifie une recette existante (champs partiels). Ne réécrit jamais les logs passés. code optionnel : attribue/modifie le code (unique ; \"\" le retire). Renvoie aussi un macro_check (recompose vs table de référence).",
       {
         id: z.string().describe("uuid de la recette"),
         name: z.string().optional(),
@@ -167,6 +167,45 @@ const handler = createMcpHandler(
         is_active: z.boolean().optional(),
       },
       jsonTool(({ id, ...fields }) => svc.updateRecipe(id, fields))
+    );
+
+    // ---------- garde-fou macros : référence nutritionnelle en base ----------
+    server.tool(
+      "check_recipe_macros",
+      "Recompose les macros d'une recette depuis ses ingrédients (table de référence CIQUAL en base) et rend un VERDICT gradué AVANT d'encoder : 'ok' (écart kcal dans la tolérance), 'warn' (écart > 10%, à revérifier), 'warn_high' (écart très élevé, probablement une erreur), 'review' (ingrédient non référencé — l'ajouter via add_ingredient_ref). Renvoie le détail PAR INGRÉDIENT (contributions) pour corriger l'ingrédient fautif. À appeler systématiquement avant add_recipe/update_recipe.",
+      {
+        name: z.string().optional(),
+        kcal: z.number(),
+        protein_g: z.number(),
+        carbs_g: z.number(),
+        fat_g: z.number(),
+        ingredients: z.array(ingredient).min(1),
+      },
+      jsonTool((args) => svc.checkRecipeMacros(args))
+    );
+
+    server.tool(
+      "add_ingredient_ref",
+      "Ajoute un ingrédient ABSENT de la table de référence, flaggé 'à vérifier' (verified=false). À utiliser quand check_recipe_macros renvoie 'review' : fournis ta meilleure estimation /unité, elle sera web-vérifiée puis validée côté agent. basis : '100g' (unités g/kg), '100ml' (ml/cl/l), 'piece' (unité pièce), 'portion' (petite sauce/épice). Macros par unité de base. Refuse un doublon (item, basis).",
+      {
+        item: z.string().describe("Nom de l'ingrédient (ex. 'tempeh', 'lait d'amande')"),
+        basis: z.enum(["100g", "100ml", "piece", "portion"]),
+        kcal: z.number().describe("kcal par unité de base"),
+        protein_g: z.number().optional(),
+        carbs_g: z.number().optional(),
+        fat_g: z.number().optional(),
+      },
+      jsonTool((args) => svc.addIngredientRef(args))
+    );
+
+    server.tool(
+      "list_ingredient_refs",
+      "Liste la table de référence nutritionnelle. verified=false pour ne voir que les ingrédients 'à vérifier' ; query filtre par nom. Renvoie aussi unverified_count.",
+      {
+        verified: z.boolean().optional().describe("Filtre : true = validés, false = à vérifier"),
+        query: z.string().optional().describe("Filtre partiel sur le nom de l'ingrédient"),
+      },
+      jsonTool((args) => svc.listIngredientRefs(args))
     );
 
     server.tool(

@@ -74,6 +74,17 @@ export const PER_100G = {
   "poivron + oignon": [32, 1.2, 6, 0.2],
   "brocoli ou haricots verts": [32, 2.6, 4, 0.4],
   "épinards ou haricots": [28, 2.5, 3, 0.4],
+  // Ajouts audit plan Claude.ai (valeurs web-vérifiées) :
+  "feta": [265, 17.5, 1.5, 21],
+  "cheddar": [399, 25, 1.5, 33],
+  "olives": [120, 1, 4, 11],
+  "graines de sésame": [573, 25, 4.5, 56],
+  "nouilles soba": [351, 14, 72, 2], // sèches (convention féculents = poids sec)
+  "pain gris ou complet": [247, 9, 43, 1.6],
+  "courgette en dés": [17, 1.2, 2.5, 0.3],
+  "brocoli, poivron, carotte": [33, 2.4, 5, 0.4],
+  "concombre, tomate, oignon rouge": [22, 1, 4, 0.2],
+  "salade, tomate": [18, 1, 3, 0.2],
 };
 
 // [kcal, P, G, L] par PIÈCE (poids moyen incorporé).
@@ -88,6 +99,7 @@ export const PER_PIECE = {
   "pistolet complet": [135, 4.5, 25, 1],     // ~50 g
   "wraps complets": [130, 3.5, 21, 3],       // ~43 g tortilla complète
   "barre protéinée": [200, 20, 18, 7],
+  "avocat": [240, 3, 13, 22], // 1 avocat moyen, chair ~150 g (web-vérifié)
 };
 
 // [kcal, P, G, L] pour 100 ml.
@@ -108,6 +120,9 @@ export const PER_PORTION = {
   "sauce soja réduite en sel + sésame": [20, 1.5, 1.5, 1.2],
   "moutarde + citron": [15, 1, 1, 1],
   "sauce yaourt-citron": [35, 2.5, 3, 1.5],
+  "sauce teriyaki (soja, miel, gingembre)": [40, 2, 7, 0.1], // ~45 g de glaçage
+  "jus de citron, sel, poivre": [3, 0.1, 0.5, 0],
+  "cannelle": [2, 0.1, 0.5, 0],
 };
 
 const round = (n) => Math.round(n * 10) / 10;

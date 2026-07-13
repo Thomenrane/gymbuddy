@@ -22,10 +22,11 @@ node scripts/verify-recipe-macros.mjs --all      # ré-audite tout le livre (DB)
 ```
 
 Protocole :
-1. Passer la recette dans le script. Verdicts : **ok** (écart kcal ≤ 10 %),
-   **à corriger** (ingrédients connus mais écart > 10 % → ajuster les macros aux
-   valeurs recomposées avant d'encoder), **à vérifier** (ingrédient non
-   référencé).
+1. Passer la recette dans le script. Verdict **gradué** : **ok** (écart kcal
+   ≤ 10 %), **warn** (ingrédients connus, écart 10–25 % → ajuster aux valeurs
+   recomposées avant d'encoder), **warn_high** (écart > 25 % → probable erreur),
+   **review** (ingrédient non référencé). Aucun verdict ne bloque : c'est un
+   contrôle éditorial (WARN, pas REJECT).
 2. Pour un **ingrédient nouveau** : web-vérifier sa valeur /100 g (CIQUAL) et
    l'**ajouter à `scripts/lib/nutrition-ref.mjs`** dans la bonne table, puis
    relancer. Ne jamais laisser un ingrédient compté à zéro en silence.
@@ -36,12 +37,29 @@ Protocole :
 4. Signaler l'écart au PO ; n'encoder qu'après correction (verdict ok).
 
 Test du garde-fou : `node scripts/nutrition-check.test.mjs` (prouve qu'une recette
-sous-estimée est rejetée, une correcte acceptée, un ingrédient nouveau signalé).
+sous-estimée est signalée, une correcte acceptée, un ingrédient nouveau flaggé).
 
-> Ce contrôle vit **côté agent** (l'agent qui compose la recette lit ce fichier
-> et a le web + le script). Le serveur `add_recipe` n'impose rien : si un jour on
-> ajoute des recettes directement depuis le connecteur claude.ai (qui ne lit pas
-> ce guide), prévoir un backstop serveur (recompute + rejet). Voir backlog.
+### Référence en base + garde-fou MCP (côté connecteur claude.ai)
+
+La table CIQUAL est **matérialisée en base** (`nutrition_ref`, seedée depuis
+`scripts/lib/nutrition-ref.mjs`) pour que **Claude.ai** puisse vérifier ses
+propres estimations via le MCP, sans lire ce guide :
+- `check_recipe_macros` : recompose + verdict gradué + **détail par ingrédient**,
+  à appeler **avant** `add_recipe`. Le backstop de `add_recipe`/`update_recipe`
+  renvoie aussi un `macro_check` (filet, jamais bloquant).
+- `add_ingredient_ref` : Claude.ai ajoute un ingrédient absent, flaggé
+  **`verified=false`** (« à vérifier »). L'agent web-vérifie la vraie valeur
+  CIQUAL et bascule `verified=true` (boucle de curation).
+- `list_ingredient_refs({verified:false})` : les ingrédients à curer.
+
+La recompose fusionne la **DB par-dessus le seed** statique (`tablesFromRows`) :
+la DB fait autorité, le seed reste le repli si la table n'est pas encore migrée.
+Une **routine quotidienne** (`trig_…`, cron `0 7 * * *`) audite les recettes
+`source=claude` récentes + les `nutrition_ref` non vérifiés.
+
+> Le module pur (`checkRecipe`/`computeMacros`, tables en paramètre) reste la
+> source unique ; `src/lib/nutrition-ref.mjs` le ré-exporte pour le MCP. Contrat :
+> `scripts/verify-nutrition-ref.sh`.
 
 ## Discipline de travail
 

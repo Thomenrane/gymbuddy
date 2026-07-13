@@ -1,9 +1,12 @@
 // Prouve le garde-fou macros (scripts/lib/nutrition-ref.mjs) :
-//  - une recette sous-estimée à ingrédients connus (cas type L10/D4) → "off"
+//  - une recette sous-estimée à ingrédients connus (cas type L10/D4) → "warn"
+//  - un écart énorme → "warn_high" (probable erreur, distinct de warn)
 //  - une recette correcte → "ok"
 //  - une recette avec un ingrédient inconnu → "review"
+//  - le détail par ingrédient (contributions) est renvoyé
+//  - la DB branchée par-dessus le seed (tablesFromRows) fait autorité
 //  - ancres CIQUAL correctes (non-régression de la table de référence)
-import { checkRecipe, computeMacros, PER_100G } from "./lib/nutrition-ref.mjs";
+import { checkRecipe, computeMacros, tablesFromRows, PER_100G } from "./lib/nutrition-ref.mjs";
 
 let fail = 0;
 const t = (label, cond, detail = "") => {
@@ -27,8 +30,17 @@ const d4 = {
   ],
 };
 let r = checkRecipe(d4);
-t(`recette sous-estimée (D4) → verdict "off" (recomposé ${r.computed.kcal} vs 600, ${r.deltaPct.kcal}%)`,
-  r.verdict === "off" && r.computed.kcal > 680);
+t(`recette sous-estimée (D4) → verdict "warn" (recomposé ${r.computed.kcal} vs 600, ${r.deltaPct.kcal}%)`,
+  r.verdict === "warn" && r.computed.kcal > 680);
+
+// Détail par ingrédient : chaque ingrédient connu contribue, les crevettes portent des protéines.
+const crev = r.contributions.find((c) => c.item.startsWith("crevettes"));
+t("détail par ingrédient renvoyé (contributions)", Array.isArray(r.contributions) && r.contributions.length === d4.ingredients.length);
+t("contribution crevettes chiffrée (protéines > 0)", !!crev && crev.known && crev.protein_g > 0);
+
+// Écart ÉNORME (mêmes ingrédients, kcal annoncées absurdement basses) → "warn_high".
+const huge = checkRecipe({ ...d4, kcal: 300 });
+t(`écart très élevé → verdict "warn_high" (${huge.deltaPct.kcal}%)`, huge.verdict === "warn_high");
 
 // Même recette avec des macros corrigées (= recomposées) → "ok".
 const d4fix = { ...d4, ...r.computed };
@@ -58,6 +70,12 @@ const novel = {
 };
 r = checkRecipe(novel);
 t("ingrédient nouveau (tempeh) → verdict \"review\" + listé", r.verdict === "review" && r.unknown.some((u) => u.startsWith("tempeh")));
+
+// La DB branchée par-dessus le seed résout l'ingrédient (add_ingredient_ref → curation).
+const withTempeh = tablesFromRows([{ item: "tempeh", basis: "100g", kcal: 190, protein_g: 19, carbs_g: 9, fat_g: 11 }]);
+const resolved = checkRecipe(novel, { tables: withTempeh });
+t("tempeh ajouté en table (DB par-dessus seed) → plus \"review\"", resolved.verdict !== "review" && resolved.unknown.length === 0);
+t("seed intact : les ancres du seed restent connues avec la table DB fusionnée", withTempeh.g["riz brun"][0] === 356);
 
 // Robustesse : ingrédients vides → computed nul, pas de crash.
 t("ingrédients vides → 0 kcal, pas d'erreur", computeMacros([]).computed.kcal === 0);

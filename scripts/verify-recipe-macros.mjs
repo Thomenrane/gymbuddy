@@ -9,11 +9,16 @@
 //
 // Format recette : { name?, kcal, protein_g, carbs_g, fat_g,
 //                    ingredients:[{item, qty, unit}] }
-// Codes de sortie : 0 = tout ok, 1 = au moins une recette "off", 2 = "review".
+// Codes de sortie : 0 = tout ok, 1 = au moins un warn/warn_high, 2 = "review".
 import fs from "node:fs";
 import { checkRecipe } from "./lib/nutrition-ref.mjs";
 
-const ICON = { ok: "✅ ok", off: "❌ à corriger", review: "🔎 à vérifier" };
+const ICON = {
+  ok: "✅ ok",
+  warn: "⚠️ à corriger",
+  warn_high: "❌ probable erreur",
+  review: "🔎 à vérifier",
+};
 
 function report(recipe) {
   const r = checkRecipe(recipe);
@@ -33,7 +38,7 @@ function report(recipe) {
     console.log(`   ⚠️ ingrédients non référencés (web-vérifier + ajouter à la table) :`);
     for (const u of r.unknown) console.log(`      · ${u}`);
   }
-  if (r.verdict === "off")
+  if (r.verdict === "warn" || r.verdict === "warn_high")
     console.log(`   → écart kcal ${r.deltaPct.kcal}% > ±${r.tolerancePct}% : corriger les macros avant d'encoder.`);
   return r.verdict;
 }
@@ -62,7 +67,8 @@ else {
   recipes = Array.isArray(parsed) ? parsed : [parsed];
 }
 
-const counts = { ok: 0, off: 0, review: 0 };
+const counts = { ok: 0, warn: 0, warn_high: 0, review: 0 };
 for (const r of recipes) counts[report(r)]++;
-console.log(`\n${recipes.length} recette(s) : ${counts.ok} ok · ${counts.off} à corriger · ${counts.review} à vérifier`);
-process.exit(counts.off ? 1 : counts.review ? 2 : 0);
+const toFix = counts.warn + counts.warn_high;
+console.log(`\n${recipes.length} recette(s) : ${counts.ok} ok · ${toFix} à corriger · ${counts.review} à vérifier`);
+process.exit(toFix ? 1 : counts.review ? 2 : 0);

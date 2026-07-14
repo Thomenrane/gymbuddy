@@ -85,6 +85,15 @@ export const PER_100G = {
   "brocoli, poivron, carotte": [33, 2.4, 5, 0.4],
   "concombre, tomate, oignon rouge": [22, 1, 4, 0.2],
   "salade, tomate": [18, 1, 3, 0.2],
+  // Ajouts routine audit MCP 2026-07-14 (recettes source=claude) :
+  "patate douce": [86, 1.5, 20, 0.15], // CRUE (web-vérifié CIQUAL 86.3/1.51/~20/0.15)
+  "pommes de terre": [80, 2, 17, 0.1], // CRUES (CIQUAL)
+  "haricots noirs": [132, 8.9, 24, 0.5], // cuits (aligné haricots rouges)
+  "guacamole": [155, 1.8, 5, 14], // préemballé (web-vérifié CIQUAL ~147–191)
+  "dinde fumée": [110, 18, 1.5, 3], // blanc de dinde fumé
+  "maïs + poivron": [65, 2.2, 12, 0.7], // mélange (maïs dominant + poivron)
+  "poivrons, oignon": [32, 1.2, 6, 0.2], // = poivron + oignon
+  "fromage": [360, 25, 1, 29], // générique type emmental/gruyère râpé — À CONFIRMER (PO)
 };
 
 // [kcal, P, G, L] par PIÈCE (poids moyen incorporé).
@@ -123,6 +132,7 @@ export const PER_PORTION = {
   "sauce teriyaki (soja, miel, gingembre)": [40, 2, 7, 0.1], // ~45 g de glaçage
   "jus de citron, sel, poivre": [3, 0.1, 0.5, 0],
   "cannelle": [2, 0.1, 0.5, 0],
+  "épices tex-mex": [5, 0.3, 1, 0.1], // routine audit MCP 2026-07-14
 };
 
 // Tables par défaut = le SEED de la base nutrition_ref (source de vérité MCP).

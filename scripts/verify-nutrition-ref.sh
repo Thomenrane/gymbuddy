@@ -32,10 +32,12 @@ echo "-- 2. Migration + cohérence du seed --"
 grep -q "create table nutrition_ref" "$MIG" && ok "table nutrition_ref" || ko "table absente"
 grep -q "enable row level security" "$MIG" && grep -q "is_owner()" "$MIG" && ok "RLS owner-only" || ko "RLS absente"
 grep -q "unique (item, basis)" "$MIG" && ok "unicité (item, basis)" || ko "unicité absente"
-# Le seed du fichier doit correspondre EXACTEMENT au générateur (pas de dérive).
+# Le générateur (table statique) doit correspondre EXACTEMENT au total des lignes
+# seedées en base : migration seed initiale + migrations de curation ultérieures
+# (la table grandit par curation ; l'historique de la migration seed reste figé).
 GEN=$(node scripts/gen-nutrition-seed.mjs | wc -l | tr -d ' ')
-INMIG=$(grep -cE "^  \('" "$MIG" | tr -d ' ')
-if [ "$GEN" = "$INMIG" ] && [ "$GEN" -ge 100 ]; then ok "seed cohérent avec le générateur ($INMIG lignes)"; else ko "seed divergent (générateur=$GEN, migration=$INMIG)"; fi
+INMIG=$(cat supabase/migrations/*nutrition_ref*.sql | grep -cE "^  \('" | tr -d ' ')
+if [ "$GEN" = "$INMIG" ] && [ "$GEN" -ge 100 ]; then ok "seed cohérent avec le générateur ($INMIG lignes seed+curation)"; else ko "seed divergent (générateur=$GEN, migrations=$INMIG)"; fi
 
 echo "-- 3. Module pur (tables en paramètre, verdict gradué) --"
 grep -q "export function tablesFromRows" "$MOD" && ok "tablesFromRows (DB par-dessus seed)" || ko "tablesFromRows absent"

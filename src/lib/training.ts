@@ -54,6 +54,8 @@ export type Workout = {
   notes: string | null;
   created_at: string;
   workout_sets?: WorkoutSet[];
+  // Lot 18 : notes par exercice (contexte qualitatif, distinct de `notes`).
+  exercise_notes?: { exercise_id: string; note: string }[];
 };
 
 export type TemplateExercise = {

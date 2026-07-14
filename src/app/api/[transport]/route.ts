@@ -269,7 +269,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "log_workout",
-      "Logge une séance. Muscu : exercises[{name, sets[{reps, weight_kg, rpe?}]}] — exos matchés/créés dans le catalogue (poids négatif = assistance, null = poids du corps, haltères = poids par haltère ; rpe = effort perçu 1-10 optionnel, à comparer au target_rpe du template). Running : distance_km, run_type, duration_min (pace calculé).",
+      "Logge une séance. Muscu : exercises[{name, note?, sets[{reps, weight_kg, rpe?}]}] — exos matchés/créés dans le catalogue (poids négatif = assistance, null = poids du corps, haltères = poids par haltère ; rpe = effort perçu 1-10 optionnel, à comparer au target_rpe du template ; note = contexte qualitatif du mouvement ce jour-là, distinct de la note de séance). Running : distance_km, run_type, duration_min (pace calculé).",
       {
         date: date.optional(),
         type: z.enum(["muscu", "running", "padel", "autre"]),
@@ -278,6 +278,13 @@ const handler = createMcpHandler(
           .array(
             z.object({
               name: z.string(),
+              note: z
+                .string()
+                .nullable()
+                .optional()
+                .describe(
+                  "Note libre pour CET exercice ce jour-là ('assistance -14 pour tenir propre', 'douleur épaule') — contexte qualitatif à lire avant d'interpréter les chiffres. Optionnelle, distincte de la note de séance globale."
+                ),
               sets: z.array(
                 z.object({
                   reps: z.number().optional(),
@@ -307,14 +314,14 @@ const handler = createMcpHandler(
 
     server.tool(
       "get_workouts",
-      "Séances (avec séries et noms d'exercices) sur une période.",
+      "Séances (avec séries, noms d'exercices et notes par exercice — contexte qualitatif à lire avant d'interpréter les chiffres) sur une période.",
       { start_date: date, end_date: date },
       jsonTool(({ start_date, end_date }) => svc.getWorkouts(start_date, end_date))
     );
 
     server.tool(
       "get_exercise_history",
-      "Historique des séries d'un exercice (analyse de progression). Match partiel sur le nom.",
+      "Historique des séries d'un exercice (analyse de progression). Match partiel sur le nom. Chaque séance inclut exercise_note (contexte qualitatif du mouvement ce jour-là, ex. 'assistance -14 pour tenir propre') — à lire AVANT d'interpréter les chiffres bruts.",
       { exercise_name: z.string(), limit: z.number().optional() },
       jsonTool(({ exercise_name, limit }) => svc.getExerciseHistory(exercise_name, limit))
     );
@@ -416,6 +423,13 @@ const handler = createMcpHandler(
       .array(
         z.object({
           name: z.string(),
+          note: z
+            .string()
+            .nullable()
+            .optional()
+            .describe(
+              "Note libre pour cet exercice ce jour-là (contexte qualitatif, distinct de la note de séance). Omise = note existante préservée ; null ou '' = effacée."
+            ),
           sets: z.array(
             z.object({
               reps: z.number().optional(),
@@ -511,7 +525,7 @@ const handler = createMcpHandler(
 
     server.tool(
       "update_workout",
-      "Modifie une séance : champs simples et/ou REMPLACEMENT COMPLET des séries (exercises). Les baselines seedés sont protégés.",
+      "Modifie une séance : champs simples et/ou REMPLACEMENT COMPLET des séries (exercises). La note par exercice est préservée si omise, remplacée si fournie, effacée si null/''. Les baselines seedés sont protégés.",
       {
         id: z.string(),
         date: date.optional(),

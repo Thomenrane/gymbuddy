@@ -9,6 +9,7 @@ import {
   ArrowUp,
   CaretDown,
   CaretUp,
+  NotePencil,
   Plus,
   X,
 } from "@phosphor-icons/react";
@@ -30,6 +31,10 @@ export type EditorExercise = {
   targetWeight?: number | null;
   targetNote?: string | null;
   assist: boolean; // poids saisis en assistance (stockés négatifs)
+  // Lot 18 : note libre pour CET exercice ce jour-là ("assistance -14 pour
+  // tenir propre") — facultative, jamais bloquante. Distincte de `note`
+  // (convention catalogue) et de la note de séance globale.
+  sessionNote?: string;
   sets: { reps: string; weight: string; rpe: string }[];
 };
 
@@ -63,6 +68,8 @@ export function SessionEditor({
   const [showRpe, setShowRpe] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  // Champs note dépliés manuellement (en plus de ceux qui ont déjà une note).
+  const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
   const startedAt = useRef(Date.now());
 
   // Persistance locale : une séance en cours ne doit JAMAIS être perdue.
@@ -335,7 +342,30 @@ export function SessionEditor({
               >
                 assistance
               </button>
+              <IconBtn
+                label={`${ex.name} : note d'exercice (optionnel)`}
+                onClick={() =>
+                  setNoteOpen((prev) => ({ ...prev, [ex.key]: !prev[ex.key] }))
+                }
+              >
+                <NotePencil size={16} />
+              </IconBtn>
             </div>
+
+            {/* Lot 18 : contexte qualitatif du mouvement ce jour-là — jamais
+                requis, ne bloque jamais la validation. Distinct de la note de
+                séance globale (sheet « Terminer »). */}
+            {(noteOpen[ex.key] || (ex.sessionNote ?? "") !== "") && (
+              <input
+                aria-label={`${ex.name} note d'exercice (optionnel)`}
+                placeholder="Note exercice (optionnel) — ex. assistance -14 pour tenir propre"
+                value={ex.sessionNote ?? ""}
+                onChange={(e) =>
+                  patchExercise(ex.key, { sessionNote: e.target.value })
+                }
+                className="mt-2 h-11 w-full rounded-md border border-border bg-surface-raised px-2.5 text-sm outline-none placeholder:text-faint focus:border-muted"
+              />
+            )}
           </section>
         ))}
       </div>
@@ -392,6 +422,7 @@ export function SessionEditor({
             const payload: DraftExercise[] = exercises.map((ex) => ({
               exerciseId: ex.exerciseId,
               name: ex.name,
+              note: ex.sessionNote?.trim() || null,
               sets: ex.sets.map((s) => {
                 const reps = s.reps.trim() === "" ? null : Math.round(Number(s.reps.replace(",", "."))) || null;
                 const raw = s.weight.trim() === "" ? null : Number(s.weight.replace(",", "."));

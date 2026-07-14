@@ -18,6 +18,9 @@ export type DraftSet = {
 export type DraftExercise = {
   exerciseId?: string;
   name: string; // pour création à la volée si exerciseId absent
+  // Lot 18 : contexte qualitatif du mouvement ce jour-là — facultatif,
+  // jamais bloquant, distinct de la note de séance (workouts.notes).
+  note?: string | null;
   sets: DraftSet[];
 };
 
@@ -105,12 +108,17 @@ export async function saveWorkout(input: {
     }
 
     const rows: object[] = [];
+    // Lot 18 : une note par (séance, exercice) — remplacement complet, comme
+    // les sets (l'édition ré-écrit l'état final envoyé par l'éditeur).
+    const noteRows = new Map<string, string>();
     for (const [pos, ex] of (input.exercises ?? []).entries()) {
       const validSets = ex.sets.filter(
         (s) => s.reps != null || s.weight_kg != null
       );
       if (validSets.length === 0) continue;
       const exerciseId = await resolveExerciseId(supabase, ex);
+      const note = ex.note?.trim();
+      if (note) noteRows.set(exerciseId, note);
       validSets.forEach((s, i) =>
         rows.push({
           workout_id: workoutId,
@@ -126,6 +134,21 @@ export async function saveWorkout(input: {
     if (rows.length > 0) {
       const { error } = await supabase.from("workout_sets").insert(rows);
       if (error) throw new Error(error.message);
+    }
+    const { error: delNotesErr } = await supabase
+      .from("workout_exercise_notes")
+      .delete()
+      .eq("workout_id", workoutId);
+    if (delNotesErr) throw new Error(delNotesErr.message);
+    if (noteRows.size > 0) {
+      const { error: notesErr } = await supabase.from("workout_exercise_notes").insert(
+        [...noteRows.entries()].map(([exercise_id, note]) => ({
+          workout_id: workoutId,
+          exercise_id,
+          note,
+        }))
+      );
+      if (notesErr) throw new Error(notesErr.message);
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Sauvegarde impossible." };

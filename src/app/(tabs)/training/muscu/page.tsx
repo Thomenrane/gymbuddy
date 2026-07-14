@@ -63,6 +63,9 @@ export default async function MuscuSessionPage({
       intensity: workout.perceived_intensity,
       notes: workout.notes ?? "",
     };
+    const noteByExercise = new Map(
+      (workout.exercise_notes ?? []).map((n) => [n.exercise_id, n.note])
+    );
     const byPosition = new Map<number, typeof workout.workout_sets & object>();
     const sets = [...(workout.workout_sets ?? [])].sort(
       (a, b) => a.position - b.position || a.set_number - b.set_number
@@ -82,6 +85,8 @@ export default async function MuscuSessionPage({
         note: catalog.find((c) => c.id === g[0].exercise_id)?.note ?? null,
         targetWeight: targetById.get(g[0].exercise_id)?.weight ?? null,
         targetNote: targetById.get(g[0].exercise_id)?.note ?? null,
+        // Lot 18 : ré-affiche la note d'exercice saisie (édition d'une séance).
+        sessionNote: noteByExercise.get(g[0].exercise_id) ?? "",
         assist: draft.assist,
         sets: draft.rows,
       };

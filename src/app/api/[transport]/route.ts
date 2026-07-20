@@ -596,4 +596,33 @@ function verifyToken(req: Request, bearerToken?: string) {
 
 const authedHandler = withMcpAuth(handler, verifyToken, { required: true });
 
-export { authedHandler as GET, authedHandler as POST, authedHandler as DELETE };
+// Neutralise le challenge OAuth sur les 401 (décision PO : auth = secret
+// statique, pas d'OAuth — cf. docs/mcp-setup.md).
+// mcp-handler répond aux requêtes non authentifiées par
+//   401 + `WWW-Authenticate: Bearer … resource_metadata=".../.well-known/oauth-protected-resource"`.
+// Or l'UI des connecteurs Claude.ai fait un pré-vol NON authentifié : elle voit
+// ce challenge, s'engage dans un flux OAuth, tente un Dynamic Client
+// Registration que ce serveur n'implémente pas, et échoue avec
+// « Couldn't register with Gym Buddy's sign-in service ».
+// En retirant l'en-tête `WWW-Authenticate`, Claude.ai traite Gym Buddy comme un
+// connecteur URL simple et s'authentifie via le `?key=<MCP_SECRET>` de l'URL.
+// Les clients bearer légitimes ne voient jamais ce 401 (ils sont déjà authentifiés).
+type RouteHandler = (req: Request, ctx: unknown) => Promise<Response>;
+
+function stripOAuthChallenge(handler: RouteHandler): RouteHandler {
+  return async (req, ctx) => {
+    const res = await handler(req, ctx);
+    if (res.status !== 401 || !res.headers.has("www-authenticate")) return res;
+    const headers = new Headers(res.headers);
+    headers.delete("www-authenticate");
+    return new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers,
+    });
+  };
+}
+
+const publicHandler = stripOAuthChallenge(authedHandler as RouteHandler);
+
+export { publicHandler as GET, publicHandler as POST, publicHandler as DELETE };

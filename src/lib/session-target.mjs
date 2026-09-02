@@ -24,19 +24,33 @@ const num = (v) => {
   return Number.isNaN(n) ? null : n;
 };
 
-/** Reps de référence de la dernière perf : le MAX des séries connues. */
-function lastReps(sets) {
-  const vals = sets.map((s) => num(s.reps)).filter((n) => n != null);
-  return vals.length ? Math.max(...vals) : null;
-}
-
 /**
- * Charge de référence de la dernière perf, en VALEUR ABSOLUE (la première
- * série porte la charge de travail ; null = poids du corps).
+ * Série de travail de la dernière perf : celle qui porte la charge la plus
+ * DURE. En assistance (poids négatif) la plus dure est la moins assistée.
+ *
+ * Prendre le poids d'une série et les reps d'une autre — par exemple le poids
+ * de la 1re et le max des reps — fabriquerait une combinaison jamais réalisée :
+ * après un échauffement 60×8 / 70×6 / 80×4, l'objectif afficherait « 8 @ 60 »
+ * pendant que la ligne « Dernière » montre le détail réel juste au-dessus.
  */
-function lastLoad(sets) {
-  const vals = sets.map((s) => num(s.weight_kg)).filter((n) => n != null);
-  return vals.length ? Math.abs(vals[0]) : null;
+function workingSet(sets) {
+  const loaded = sets
+    .map((s) => ({ reps: num(s.reps), w: num(s.weight_kg) }))
+    .filter((s) => s.w != null);
+  if (loaded.length === 0) {
+    const reps = sets.map((s) => num(s.reps)).filter((n) => n != null);
+    return { load: null, reps: reps.length ? Math.max(...reps) : null };
+  }
+  const assist = loaded.some((s) => s.w < 0);
+  const load = assist
+    ? Math.min(...loaded.map((s) => Math.abs(s.w)))
+    : Math.max(...loaded.map((s) => Math.abs(s.w)));
+  // Reps tenues À cette charge : le haut de fourchette se juge sur la série de
+  // travail, pas sur un échauffement plus léger.
+  const atLoad = loaded
+    .filter((s) => Math.abs(s.w) === load && s.reps != null)
+    .map((s) => s.reps);
+  return { load, reps: atLoad.length ? Math.max(...atLoad) : null };
 }
 
 /**
@@ -56,8 +70,7 @@ export function sessionTarget({ defaults, targetWeight, last } = {}) {
     return w != null && w < 0;
   });
 
-  const doneReps = lastReps(done);
-  const doneLoad = lastLoad(done);
+  const { reps: doneReps, load: doneLoad } = workingSet(done);
   const target = num(targetWeight);
   const weight = target != null ? Math.abs(target) : doneLoad;
 

@@ -54,6 +54,32 @@ const hetero = {
 };
 t(`séries hétérogènes → vise le max « 3×6 @ 60 kg »`, label(hetero) === "3×6 @ 60 kg", label(hetero));
 
+// Échauffement en pyramide : l'objectif doit porter sur la SÉRIE DE TRAVAIL.
+// Mélanger le poids d'une série et les reps d'une autre fabriquerait « 8 @ 60 »,
+// une combinaison jamais réalisée, en contradiction avec la ligne « Dernière ».
+const pyramide = {
+  defaults: { sets: 3, repsMin: 4, repsMax: 8 },
+  targetWeight: null,
+  last: { sets: [
+    { reps: 8, weight_kg: 60 },
+    { reps: 6, weight_kg: 70 },
+    { reps: 4, weight_kg: 80 },
+  ] },
+};
+t(`échauffement en pyramide → série de travail « 3×4 @ 80 kg »`, label(pyramide) === "3×4 @ 80 kg", label(pyramide));
+
+// Séries de travail égales avec un échauffement plus léger devant.
+const echauffement = {
+  defaults: { sets: 3, repsMin: 4, repsMax: 6 },
+  targetWeight: null,
+  last: { sets: [
+    { reps: 10, weight_kg: 40 },
+    { reps: 6, weight_kg: 67.5 },
+    { reps: 5, weight_kg: 67.5 },
+  ] },
+};
+t(`reps prises à la charge de travail, pas à l'échauffement`, label(echauffement) === "3×6 @ 67.5 kg", label(echauffement));
+
 // Assistance (Pull-Ups du screenshot) : dernière 4×8 @ assist. 14, cible 14
 // (stockée positive côté MCP) → même difficulté, on garde 8.
 const pullups = {

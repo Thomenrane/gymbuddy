@@ -29,7 +29,7 @@ import {
   type DraftExercise,
 } from "@/app/(tabs)/training/training-actions";
 import { PROGRESSION_HINT } from "@/lib/training";
-import { draftKeyOf, draftProgress } from "@/lib/session-draft.mjs";
+import { draftKeyOf, nextAddSeq } from "@/lib/session-draft.mjs";
 import { draftsStore } from "@/lib/session-drafts-store";
 import { stepValue } from "@/lib/session-controls.mjs";
 import { useWakeLock } from "@/lib/use-wake-lock";
@@ -170,16 +170,22 @@ export function SessionEditor({
     const stored = draftsStore.get()[draftKey];
     let saved = stored?.exercises as EditorExercise[] | undefined;
     let since = stored?.startedAt;
+    let migrated = false;
     if (!saved) {
-      // Repli sur l'ancien format (une clé par séance), et SEULEMENT s'il porte
-      // une vraie saisie : un brouillon fantôme d'avant le Lot 22 ré-imposerait
-      // l'ancien pré-remplissage (dernière perf) à la place de l'objectif.
+      // Repli sur l'ancien format (une clé par séance). On restaure SANS filtrer
+      // sur la saisie : `touched` n'existe pas avant ce lot, donc tout filtre
+      // fondé dessus rejetterait 100 % des anciens brouillons — y compris une
+      // séance réellement en cours au moment du déploiement. Entre un fantôme
+      // affiché une fois (que « Réinitialiser » balaie) et une séance perdue,
+      // l'invariant du fichier tranche : une séance en cours ne doit JAMAIS
+      // être perdue.
       try {
         const raw = localStorage.getItem(draftKey);
         const legacy = raw ? JSON.parse(raw) : null;
-        if (legacy && draftProgress(legacy.exercises).done > 0) {
+        if (Array.isArray(legacy?.exercises) && legacy.exercises.length > 0) {
           saved = legacy.exercises;
           since = legacy.startedAt;
+          migrated = true;
         }
       } catch {
         /* draft illisible : on repart du pré-rempli */
@@ -188,7 +194,13 @@ export function SessionEditor({
     if (Array.isArray(saved) && saved.length > 0) {
       setExercises(saved);
       startedAt.current = since ?? Date.now();
+      // Les clés `add-N` restaurées sont déjà prises : le compteur reprend
+      // après, sinon le prochain ajout dupliquerait une clé existante.
+      setAddSeq(nextAddSeq(saved));
       setRestored(true);
+      // Un brouillon de l'ancien format est migré vers l'index : il devient
+      // visible depuis « Reprendre », effaçable, et soumis à la purge 24 h.
+      if (migrated) dirty.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -221,6 +233,10 @@ export function SessionEditor({
   function resetDraft() {
     forgetDraft();
     setExercises(initialExercises);
+    // Sans ça, la durée pré-remplie à « Terminer » compte depuis le brouillon
+    // jeté — potentiellement plusieurs heures avant la séance réelle.
+    startedAt.current = Date.now();
+    setAddSeq(0);
     setRestored(false);
   }
 
@@ -302,7 +318,10 @@ export function SessionEditor({
   }
 
   return (
-    <main className="space-y-4">
+    // Le chrono est une barre fixe à 64 px du bas : sans marge supplémentaire
+    // il recouvre le dernier élément de la page, c'est-à-dire « Terminer la
+    // séance ».
+    <main className={`space-y-4 ${rest ? "pb-20" : ""}`}>
       <div className="flex items-center justify-between">
         <Link
           href={`/training/day/${date}`}

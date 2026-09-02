@@ -169,6 +169,21 @@ export async function getLastSets(
   if (!rpc.error) {
     return setsFromLatestRows((rpc.data ?? []) as LatestSetRow[]);
   }
+  // Le repli n'existe que pour UN cas : la fonction n'est pas encore en base
+  // (PGRST202 côté PostgREST, 42883 côté Postgres). Traiter n'importe quelle
+  // erreur comme « migration absente » ferait retomber silencieusement et
+  // définitivement sur le scan complet que ce lot supprime — un timeout ou un
+  // droit révoqué passerait pour normal. Tout le reste doit remonter.
+  const missing =
+    rpc.error.code === "PGRST202" ||
+    rpc.error.code === "42883" ||
+    /does not exist|could not find the function/i.test(rpc.error.message ?? "");
+  if (!missing) {
+    throw new Error(`getLastSets (rpc): ${rpc.error.message}`);
+  }
+  console.warn(
+    "latest_sets_by_exercise absente : repli sur le scan complet. Appliquer supabase/migrations/20260902000001_latest_sets_rpc.sql."
+  );
 
   // Repli : migration pas encore appliquée. L'ordre déploiement / migration n'a
   // donc aucune importance, et le résultat est identique (prouvé par

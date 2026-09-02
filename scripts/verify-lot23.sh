@@ -69,10 +69,15 @@ grep -q 'href={`/journal?date=' "$DAYNAV" && ok "navigation jour du journal rest
 grep -q 'router.push(`/journal?date=' "$SWIPE" && ok "swipe du journal reste sur /journal" || ko "le swipe renverrait vers le Plan"
 
 echo "-- 4. Revalidations à jour --"
+# Assertion POSITIVE : la version « A && !B && ko || ok » affichait OK dès que
+# A manquait — y compris sur un fichier sans aucun revalidatePath.
+grep -q 'revalidatePath("/journal");' "$TODAY_ACT" \
+  && ok "les actions du journal invalident /journal" \
+  || ko "les actions du journal n'invalident pas /journal"
+# Les cibles alimentent AUSSI le Plan (accueil) : il doit être invalidé.
 grep -q 'revalidatePath("/");' "$TODAY_ACT" \
-  && ! grep -q 'revalidatePath("/journal");' "$TODAY_ACT" \
-  && ko "les actions du journal invalident encore l'ancien chemin" \
-  || ok "les actions du journal invalident /journal"
+  && ok "les cibles invalident aussi l'accueil (le Plan les consomme)" \
+  || ko "l'accueil servirait des cibles périmées après édition"
 grep -q 'revalidatePath("/journal");' "$PLAN_ACT" && ok "les actions du plan invalident aussi le journal" || ko "journal non invalidé par le plan"
 
 echo "-- 5. Serveur ($RUN_BASE) --"

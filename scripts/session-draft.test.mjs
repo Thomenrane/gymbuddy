@@ -12,6 +12,7 @@ import {
   isResumable,
   purgeStale,
   sortedDrafts,
+  nextAddSeq,
   resumeHref,
   DRAFT_TTL_MS,
 } from "../src/lib/session-draft.mjs";
@@ -71,6 +72,14 @@ const ordre = sortedDrafts({
   b: { key: "b", updatedAt: now - 1000 },
 }).map((d) => d.key);
 t("tri du plus récent au plus ancien", ordre.join(",") === "b,a", ordre.join(","));
+
+// Clés d'ajout : reprendre un brouillon ne doit jamais recréer une clé prise.
+t("compteur d'ajout reparti après les clés restaurées",
+  nextAddSeq([{ key: "tpl-0" }, { key: "add-0" }, { key: "add-3" }]) === 4,
+  String(nextAddSeq([{ key: "tpl-0" }, { key: "add-0" }, { key: "add-3" }])));
+t("aucun ajout restauré → repart de 0", nextAddSeq([{ key: "tpl-0" }]) === 0);
+t("brouillon vide → repart de 0", nextAddSeq([]) === 0 && nextAddSeq(null) === 0);
+t("clé malformée ignorée", nextAddSeq([{ key: "add-x" }, { key: null }]) === 0);
 
 // Liens de reprise.
 t("reprise depuis un template",

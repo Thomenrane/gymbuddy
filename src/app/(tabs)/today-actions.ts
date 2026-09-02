@@ -211,6 +211,9 @@ export async function updateTargets(input: {
 
   revalidatePath("/journal");
   revalidatePath("/reglages");
+  // Le Plan (accueil) consomme aussi les cibles : il colore chaque jour de la
+  // semaine par écart aux kcal/protéines. Sans ça il les compare aux anciennes.
+  revalidatePath("/");
   return { ok: true };
 }
 

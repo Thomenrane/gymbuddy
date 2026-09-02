@@ -56,7 +56,7 @@ try {
 
   // Retour → la vue Plan retrouve la semaine affichée.
   await page.goBack();
-  await page.waitForURL(new RegExp(`/plan\\?week=${MON}`), { timeout: 15000 }).catch(() => {});
+  await page.waitForURL(new RegExp(`/\\?week=${MON}`), { timeout: 15000 }).catch(() => {});
   check("retour → Plan sur la même semaine", new URL(page.url()).searchParams.get("week") === MON, page.url());
 } catch (e) {
   console.error("  FAIL", e.message);

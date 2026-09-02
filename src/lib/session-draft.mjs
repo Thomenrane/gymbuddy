@@ -62,6 +62,23 @@ export function sortedDrafts(index) {
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/**
+ * Prochain numéro de clé pour un exercice ajouté à la main.
+ *
+ * Les clés `add-N` sont PERSISTÉES dans le brouillon. Repartir de 0 après une
+ * reprise recréerait `add-0` alors qu'il existe déjà : React verrait deux
+ * éléments de même clé, `patchExercise` écrirait dans les deux à la fois et
+ * supprimer l'un supprimerait l'autre.
+ */
+export function nextAddSeq(exercises) {
+  let max = -1;
+  for (const ex of exercises ?? []) {
+    const m = /^add-(\d+)$/.exec(ex?.key ?? "");
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max + 1;
+}
+
 /** Lien de reprise vers l'écran séance, dans l'état exact où il a été quitté. */
 export function resumeHref(draft) {
   const params = new URLSearchParams();

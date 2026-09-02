@@ -706,14 +706,18 @@ function ExerciseDetail({ ex }: { ex: EditorExercise }) {
 
   return (
     <div className="mt-2 space-y-1 rounded-md bg-surface-raised px-2.5 py-2 text-xs leading-relaxed">
-      {ex.targetLabel ? (
+      {ex.targetLabel && (
         <p className="font-medium text-primary">Objectif : {ex.targetLabel}</p>
-      ) : (
-        ex.targetWeight != null && (
-          <p className="font-medium text-primary">
-            Poids cible : {ex.targetWeight} kg
-          </p>
-        )
+      )}
+      {/* La cible chiffrée apparaît à part quand l'objectif ne la porte pas :
+          soit il n'y a pas d'objectif du tout (édition), soit le signe est
+          inconnu faute d'historique chargé — auquel cas la case poids reste
+          vide et c'est au PO de trancher charge ou assistance. */}
+      {ex.targetWeight != null && !(ex.targetLabel ?? "").includes("@") && (
+        <p className="font-medium text-primary">
+          Poids cible : {ex.targetWeight} kg
+          {!ex.targetLabel ? "" : " — à saisir : charge ajoutée ou assistance ?"}
+        </p>
       )}
       {consignes && <p className="text-muted">Cible : {consignes}</p>}
       {ex.targetNote && <p className="text-muted">{ex.targetNote}</p>}

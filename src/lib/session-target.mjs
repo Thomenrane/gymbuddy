@@ -72,7 +72,17 @@ export function sessionTarget({ defaults, targetWeight, last } = {}) {
 
   const { reps: doneReps, load: doneLoad } = workingSet(done);
   const target = num(targetWeight);
-  const weight = target != null ? Math.abs(target) : doneLoad;
+
+  // Le SIGNE (charge ajoutée ou assistance) n'est nulle part dans la cible :
+  // set_exercise_target impose target_weight_kg > 0, Claude l'écrit donc en
+  // prose (« ASSISTANCE 14 kg (soit -14) »). Il ne peut être déduit que d'une
+  // charge déjà enregistrée. Sans historique chargé, on connaît la magnitude
+  // mais PAS la convention : pré-remplir « 14 » dans une case dont l'en-tête
+  // dit « poids (kg) » ferait enregistrer +14 kg lestés pour une séance
+  // assistée — le pré-remplissage rend l'erreur invisible et validable d'un
+  // tap. On laisse donc la case vide et la cible s'affiche derrière le ⓘ.
+  const signKnown = doneLoad != null;
+  const weight = target != null ? (signKnown ? Math.abs(target) : null) : doneLoad;
 
   const min = num(d.repsMin);
   const max = num(d.repsMax);

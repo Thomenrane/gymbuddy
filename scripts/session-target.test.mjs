@@ -96,6 +96,35 @@ t(`assistance stable → « 4×8 @ assist. 14 kg »`, label(pullups) === "4×8 @
 const pullupsDur = { ...pullups, targetWeight: 12 };
 t(`assistance réduite → plus dur → « 4×6 @ assist. 12 kg »`, label(pullupsDur) === "4×6 @ assist. 12 kg", label(pullupsDur));
 
+// Le SIGNE de la cible n'existe nulle part : set_exercise_target impose
+// target_weight_kg > 0, Claude écrit « ASSISTANCE 14 kg » en prose. Sans
+// historique chargé, pré-remplir 14 dans une colonne « poids (kg) » ferait
+// enregistrer +14 kg lestés pour une séance assistée, d'un seul tap.
+const signeInconnu = {
+  defaults: { sets: 4, repsMin: 6, repsMax: 8 },
+  targetWeight: 14,
+  last: { sets: [{ reps: 8, weight_kg: null }] },
+};
+const si = sessionTarget(signeInconnu);
+t("poids du corps + cible → charge NON pré-remplie (signe inconnu)", si.weight === null, String(si.weight));
+t("poids du corps + cible → libellé sans charge affirmée", formatTarget(si) === "4×8", formatTarget(si));
+t("poids du corps + cible → case poids vide", targetRows(si)[0].weight === "");
+const jamaisFait = sessionTarget({ defaults: { sets: 3, repsMin: 8, repsMax: 12 }, targetWeight: 20, last: null });
+t("exercice jamais fait + cible → charge NON pré-remplie", jamaisFait.weight === null && targetRows(jamaisFait)[0].weight === "");
+// Dès qu'une charge signée existe, la cible est pré-remplie normalement.
+const signeConnuAssist = sessionTarget({
+  defaults: { sets: 4, repsMin: 6, repsMax: 8 },
+  targetWeight: 12,
+  last: { sets: [{ reps: 8, weight_kg: -14 }] },
+});
+t("historique assisté → cible pré-remplie côté assistance", signeConnuAssist.weight === 12 && signeConnuAssist.assist === true);
+const signeConnuCharge = sessionTarget({
+  defaults: { sets: 4, repsMin: 6, repsMax: 8 },
+  targetWeight: 70,
+  last: { sets: [{ reps: 6, weight_kg: 67.5 }] },
+});
+t("historique chargé → cible pré-remplie côté charge", signeConnuCharge.weight === 70 && signeConnuCharge.assist === false);
+
 // Aucune cible Claude : on retombe sur la dernière perf.
 const sansCible = {
   defaults: { sets: 3, repsMin: 8, repsMax: 12 },

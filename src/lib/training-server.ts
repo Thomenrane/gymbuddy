@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { latestSetsByExercise, type LastSetRow, type LastSets } from "@/lib/last-sets.mjs";
+import {
+  latestSetsByExercise,
+  setsFromLatestRows,
+  type LastSetRow,
+  type LastSets,
+  type LatestSetRow,
+} from "@/lib/last-sets.mjs";
 import type {
   Exercise,
   Workout,
@@ -153,6 +159,20 @@ export async function getLastSets(
 ): Promise<Map<string, LastSets>> {
   if (exerciseIds.length === 0) return new Map();
   const supabase = await createClient();
+
+  // Lot 25 : le tri « dernier workout » se fait en base (DISTINCT ON), qui ne
+  // renvoie que les séries utiles. L'ancienne requête ramenait TOUT
+  // l'historique de chaque exercice pour n'en garder qu'une poignée de lignes.
+  const rpc = await supabase.rpc("latest_sets_by_exercise", {
+    exercise_ids: exerciseIds,
+  });
+  if (!rpc.error) {
+    return setsFromLatestRows((rpc.data ?? []) as LatestSetRow[]);
+  }
+
+  // Repli : migration pas encore appliquée. L'ordre déploiement / migration n'a
+  // donc aucune importance, et le résultat est identique (prouvé par
+  // scripts/last-sets.test.mjs).
   const { data, error } = await supabase
     .from("workout_sets")
     .select(
@@ -162,3 +182,4 @@ export async function getLastSets(
   if (error) throw new Error(`getLastSets: ${error.message}`);
   return latestSetsByExercise((data ?? []) as unknown as LastSetRow[]);
 }
+

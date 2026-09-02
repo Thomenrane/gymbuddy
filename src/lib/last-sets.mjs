@@ -47,6 +47,34 @@ export function latestSetsByExercise(rows) {
 }
 
 /**
+ * Même résultat que latestSetsByExercise, mais à partir des lignes DÉJÀ triées
+ * par la base (RPC latest_sets_by_exercise, Lot 25) : le tri « dernier workout »
+ * a eu lieu en SQL, il ne reste qu'à regrouper par exercice.
+ *
+ * @param {Array<{exercise_id: string, workout_date: string, set_number: number,
+ *   reps: number|null, weight_kg: number|string|null}>} rows
+ */
+export function setsFromLatestRows(rows) {
+  const result = new Map();
+  for (const row of rows ?? []) {
+    let entry = result.get(row.exercise_id);
+    if (!entry) {
+      entry = { workout_date: row.workout_date, sets: [] };
+      result.set(row.exercise_id, entry);
+    }
+    entry.sets.push({
+      set_number: row.set_number,
+      reps: row.reps,
+      weight_kg: row.weight_kg == null ? null : Number(row.weight_kg),
+    });
+  }
+  for (const entry of result.values()) {
+    entry.sets.sort((a, b) => a.set_number - b.set_number);
+  }
+  return result;
+}
+
+/**
  * Résumé compact "Dernière fois : 3×4 @ 70 kg" (ou détail si sets hétérogènes).
  * Conventions AMENDEMENT 3 : poids négatif = assistance, null = poids du corps.
  */

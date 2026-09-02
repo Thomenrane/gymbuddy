@@ -8,9 +8,11 @@
 # 3. MCP (HTTP bearer) : set_exercise_target pose/lit/efface une cible ;
 #    list_exercises + get_exercise_history la renvoient ; sans cible → null
 #    sans erreur (scripts/lot14-mcp-target.mjs).
-# 4. DOM : l'écran séance affiche dernier fait + cible + RPE cible pour un exo
-#    ayant une cible, dernier fait seul sinon, et le champ poids reste pré-rempli
-#    au dernier poids fait — pas la cible (scripts/e2e/lot14-dom.mjs).
+# 4. DOM : la cible est portée par l'écran séance et reste distincte du dernier
+#    fait (scripts/e2e/lot14-dom.mjs). RÉVISÉ AU LOT 19, décision PO : le flux ne
+#    garde qu'une ligne « Dernière », la cible / la fourchette / le RPE cible
+#    passent derrière le ⓘ, et le champ poids est pré-rempli à l'OBJECTIF (plus au
+#    dernier poids fait). Mêmes faits, nouvel emplacement.
 # 5. Garde-fou : aucun calcul/écriture de cible côté app (Claude only via MCP).
 #
 # Local (CI) : serveur local. Distant : exporter BASE_URL=<url> (ex. prod).
@@ -57,7 +59,11 @@ BASE=$(crange "$REST/workouts?notes=eq.$NOTE_ENC&select=id")
 [ "$BASE" = "3" ] && ok "3 baselines intactes" || ko "baselines = $BASE (attendu 3)"
 
 echo "-- 3. Garde-fou : aucune écriture de cible côté app (MCP only) --"
-if grep -qi "target_weight" "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts"; then
+# Le garde-fou vise une ÉCRITURE : « target_weight_kg: » / « target_weight_note: »
+# est la forme d'une clé de payload Supabase (insert/update). Depuis le Lot 20,
+# une action LIT légitimement la cible (« exercise.target_weight_kg ») pour
+# pré-remplir un exercice ajouté en séance — lire n'est pas poser.
+if grep -qE "target_weight_(kg|note)[[:space:]]*:" "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts"; then
   ko "une action app écrit une cible (interdit — Claude only via MCP)"
 else
   ok "aucune action app n'écrit de cible (posée uniquement par Claude via MCP)"
@@ -82,10 +88,10 @@ else
   ko "MCP cible (scripts/lot14-mcp-target.mjs)"
 fi
 
-echo "-- 6. DOM : dernier fait + cible + RPE cible / pré-remplissage --"
+echo "-- 6. DOM : cible portée par l'écran séance (repliée depuis le Lot 19) --"
 if NODE_USE_ENV_PROXY=1 NO_PROXY="localhost,127.0.0.1" no_proxy="localhost,127.0.0.1" \
    BASE_URL="$RUN_BASE" node scripts/e2e/lot14-dom.mjs; then
-  ok "DOM : cible affichée + poids réel = dernier fait (voir détail ci-dessus)"
+  ok "DOM : cible retrouvée derrière le ⓘ + poids pré-rempli à l'objectif"
 else
   ko "DOM séance cible (scripts/e2e/lot14-dom.mjs)"
 fi

@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  CaretDown,
-  CaretUp,
+  Info,
   NotePencil,
   Plus,
+  Question,
   X,
 } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
@@ -30,6 +37,10 @@ export type EditorExercise = {
   // Lot 14 : cible de poids posée par Claude (indicatif, distinct du dernier fait).
   targetWeight?: number | null;
   targetNote?: string | null;
+  // Lot 19 : objectif assemblé (« 4×6 @ 67.5 kg »). Les cases sont pré-remplies
+  // avec, donc il ne s'affiche PAS dans le flux : il vit derrière le ⓘ, pour
+  // qu'on puisse le retrouver après avoir tapé dans les cases.
+  targetLabel?: string | null;
   assist: boolean; // poids saisis en assistance (stockés négatifs)
   // Lot 18 : note libre pour CET exercice ce jour-là ("assistance -14 pour
   // tenir propre") — facultative, jamais bloquante. Distincte de `note`
@@ -42,6 +53,42 @@ type CatalogItem = { id: string; name: string; note: string | null };
 
 const inputCls =
   "h-11 w-full rounded-md border border-border bg-surface-raised px-2.5 text-center text-base outline-none focus:border-muted";
+
+const RPE_COL_KEY = "gb-rpe-col";
+
+/**
+ * Préférence « colonne RPE visible », lue dans localStorage sans setState dans
+ * un effet : le rendu serveur part toujours de `false`, le client se
+ * resynchronise à l'hydratation. Store minimal partagé par useSyncExternalStore.
+ */
+const rpeColStore = {
+  listeners: new Set<() => void>(),
+  subscribe(listener: () => void) {
+    rpeColStore.listeners.add(listener);
+    return () => {
+      rpeColStore.listeners.delete(listener);
+    };
+  },
+  get() {
+    try {
+      return localStorage.getItem(RPE_COL_KEY) === "1";
+    } catch {
+      return false; // stockage inaccessible : colonne masquée, défaut
+    }
+  },
+  set(value: boolean) {
+    try {
+      localStorage.setItem(RPE_COL_KEY, value ? "1" : "0");
+    } catch {
+      /* préférence non mémorisée : sans conséquence sur la séance */
+    }
+    rpeColStore.listeners.forEach((l) => l());
+  },
+};
+
+/** « 2026-08-28 » → « 28/08 » : la date longue mangeait la ligne de contexte. */
+const shortDate = (iso: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : iso;
 
 export function SessionEditor({
   title,
@@ -64,13 +111,25 @@ export function SessionEditor({
   const draftKey = `gb-session-${editId ?? templateId ?? "vierge"}-${date}`;
   const [exercises, setExercises] = useState(initialExercises);
   const [restored, setRestored] = useState(false);
-  const [showHint, setShowHint] = useState(false);
-  const [showRpe, setShowRpe] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   // Champs note dépliés manuellement (en plus de ceux qui ont déjà une note).
   const [noteOpen, setNoteOpen] = useState<Record<string, boolean>>({});
+  // Lot 19 : détail d'un exercice (objectif, fourchette, notes) déplié à la
+  // demande — le flux ne garde qu'UNE ligne de contexte, « Dernière ».
+  const [infoOpen, setInfoOpen] = useState<Record<string, boolean>>({});
+  // Colonne RPE masquée par défaut : un tiers de la largeur pour un champ
+  // rarement rempli. Préférence globale, mémorisée localement.
+  const rpeCol = useSyncExternalStore(rpeColStore.subscribe, rpeColStore.get, () => false);
   const startedAt = useRef(Date.now());
+  // Une séance déjà notée en RPE (édition) affiche la colonne quoi qu'il arrive :
+  // on ne masque jamais une donnée saisie.
+  const rpeVisible =
+    rpeCol || exercises.some((ex) => ex.sets.some((s) => s.rpe.trim() !== ""));
+  const gridCls = rpeVisible
+    ? "grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5"
+    : "grid grid-cols-[1.5rem_1fr_1fr_2rem] items-center gap-1.5";
 
   // Persistance locale : une séance en cours ne doit JAMAIS être perdue.
   useEffect(() => {
@@ -145,73 +204,54 @@ export function SessionEditor({
         )}
       </div>
 
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      {/* Les deux rappels dépliables (double progression + échelle RPE)
+          occupaient ~90 px en tête de CHAQUE séance : ils vivent maintenant
+          derrière ce « ? ». */}
+      <div className="flex items-start justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <button
+          type="button"
+          aria-label="Aide : double progression, RPE, affichage"
+          onClick={() => setHelpOpen(true)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-muted active:bg-surface-raised"
+        >
+          <Question size={16} />
+        </button>
+      </div>
       {restored && (
         <p className="text-sm text-accent">Séance en cours restaurée.</p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setShowHint((v) => !v)}
-        className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-left text-xs text-muted"
-      >
-        <span>Rappel : double progression</span>
-        {showHint ? <CaretUp size={14} /> : <CaretDown size={14} />}
-      </button>
-      {showHint && <p className="px-1 text-xs leading-relaxed text-muted">{PROGRESSION_HINT}</p>}
-
-      <button
-        type="button"
-        onClick={() => setShowRpe((v) => !v)}
-        className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-left text-xs text-muted"
-      >
-        <span>Échelle RPE (effort perçu, optionnel)</span>
-        {showRpe ? <CaretUp size={14} /> : <CaretDown size={14} />}
-      </button>
-      {showRpe && (
-        <p className="px-1 text-xs leading-relaxed text-muted">
-          RPE = reps en réserve. 10 = échec · 9 = 1 rep en réserve · 8 = 2 en
-          réserve (cible du programme) · 7 = 3-4 en réserve. À noter par série
-          si tu veux — jamais obligatoire.
-        </p>
       )}
 
       <div className="space-y-4">
         {exercises.map((ex, exIndex) => (
           <section key={ex.key} className="rounded-lg border border-border bg-surface p-3">
+            {/* Lot 19 : UNE seule ligne de contexte dans le flux (« Dernière »).
+                L'objectif est dans les cases, pré-rempli ; la fourchette, le
+                RPE cible, le repos et les notes longues de Claude vivent
+                derrière le ⓘ — sur le screenshot du PO elles prenaient jusqu'à
+                9 lignes de texte pour 3 lignes de saisie. */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="font-semibold leading-tight">{ex.name}</h2>
-                {ex.note && <p className="text-xs text-faint">{ex.note}</p>}
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <h2 className="truncate font-semibold leading-tight">{ex.name}</h2>
+                  {hasDetail(ex) && (
+                    <button
+                      type="button"
+                      aria-label={`${ex.name} : objectif et consignes`}
+                      aria-expanded={Boolean(infoOpen[ex.key])}
+                      onClick={() =>
+                        setInfoOpen((prev) => ({ ...prev, [ex.key]: !prev[ex.key] }))
+                      }
+                      className="-m-2.5 shrink-0 p-2.5 text-muted active:text-foreground"
+                    >
+                      <Info size={16} />
+                    </button>
+                  )}
+                </div>
                 {ex.refSummary && (
                   <p className="mt-0.5 text-xs text-muted">
-                    Dernière fois : <span className="text-foreground">{ex.refSummary}</span>
-                    {ex.refDate && <span className="text-faint"> · {ex.refDate}</span>}
-                  </p>
-                )}
-                {/* Lot 14 : cible de poids posée par Claude — repère de surcharge
-                    progressive, distinct du dernier fait. Affichée seulement si
-                    présente ; le champ poids réel reste pré-rempli au dernier fait. */}
-                {ex.targetWeight != null && (
-                  <p className="mt-0.5 text-xs">
-                    <span className="font-medium text-primary">
-                      Poids cible : {ex.targetWeight} kg
-                    </span>
-                    {ex.targetNote && (
-                      <span className="text-muted"> — {ex.targetNote}</span>
-                    )}
-                  </p>
-                )}
-                {(ex.repRange || ex.rpe || ex.rest) && (
-                  <p className="text-xs text-faint">
-                    Cible :{" "}
-                    {[
-                      ex.repRange && `${ex.repRange} reps`,
-                      ex.rpe && `RPE ${ex.rpe}`,
-                      ex.rest && `repos ${ex.rest}s`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    Dernière : <span className="text-foreground">{ex.refSummary}</span>
+                    {ex.refDate && <span className="text-faint"> · {shortDate(ex.refDate)}</span>}
                   </p>
                 )}
               </div>
@@ -237,21 +277,20 @@ export function SessionEditor({
               </div>
             </div>
 
+            {infoOpen[ex.key] && <ExerciseDetail ex={ex} />}
+
             <div className="mt-2 space-y-1.5">
-              <div className="grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5 text-xs text-faint">
+              <div className={`${gridCls} text-xs text-faint`}>
                 <span />
                 <span className="text-center">reps</span>
                 <span className="text-center">
                   {ex.assist ? "assist. (kg)" : "poids (kg)"}
                 </span>
-                <span className="text-center">RPE</span>
+                {rpeVisible && <span className="text-center">RPE</span>}
                 <span />
               </div>
               {ex.sets.map((set, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5"
-                >
+                <div key={i} className={gridCls}>
                   <span className="text-center text-sm text-muted">{i + 1}</span>
                   <input
                     aria-label={`${ex.name} série ${i + 1} reps`}
@@ -281,21 +320,25 @@ export function SessionEditor({
                     className={inputCls}
                   />
                   {/* RPE ressenti optionnel : placeholder = RPE cible s'il existe.
-                      Jamais requis, ne bloque pas la validation s'il est vide. */}
-                  <input
-                    aria-label={`${ex.name} série ${i + 1} RPE ressenti (optionnel)`}
-                    inputMode="decimal"
-                    placeholder={ex.rpe ? String(ex.rpe) : "–"}
-                    value={set.rpe}
-                    onChange={(e) =>
-                      patchExercise(ex.key, {
-                        sets: ex.sets.map((s, j) =>
-                          j === i ? { ...s, rpe: e.target.value } : s
-                        ),
-                      })
-                    }
-                    className={`${inputCls} px-1 text-sm text-muted`}
-                  />
+                      Jamais requis, ne bloque pas la validation s'il est vide.
+                      Colonne masquée par défaut depuis le Lot 19 (préférence
+                      dans la sheet « ? ») — la valeur saisie reste intacte. */}
+                  {rpeVisible && (
+                    <input
+                      aria-label={`${ex.name} série ${i + 1} RPE ressenti (optionnel)`}
+                      inputMode="decimal"
+                      placeholder={ex.rpe ? String(ex.rpe) : "–"}
+                      value={set.rpe}
+                      onChange={(e) =>
+                        patchExercise(ex.key, {
+                          sets: ex.sets.map((s, j) =>
+                            j === i ? { ...s, rpe: e.target.value } : s
+                          ),
+                        })
+                      }
+                      className={`${inputCls} px-1 text-sm text-muted`}
+                    />
+                  )}
                   <IconBtn
                     label={`Supprimer la série ${i + 1}`}
                     onClick={() =>
@@ -387,6 +430,14 @@ export function SessionEditor({
         Terminer la séance
       </button>
 
+      {helpOpen && (
+        <HelpSheet
+          onClose={() => setHelpOpen(false)}
+          rpeCol={rpeCol}
+          onToggleRpeCol={() => rpeColStore.set(!rpeCol)}
+        />
+      )}
+
       {addOpen && (
         <AddExerciseSheet
           catalog={catalog}
@@ -459,6 +510,106 @@ export function SessionEditor({
         />
       )}
     </main>
+  );
+}
+
+/** Y a-t-il quoi que ce soit à montrer derrière le ⓘ de cet exercice ? */
+function hasDetail(ex: EditorExercise): boolean {
+  return Boolean(
+    ex.targetLabel ||
+      ex.targetWeight != null ||
+      ex.targetNote ||
+      ex.repRange ||
+      ex.rpe ||
+      ex.rest ||
+      ex.note
+  );
+}
+
+/**
+ * Détail replié d'un exercice : l'objectif (que les cases pré-remplies
+ * portent déjà, mais qu'on ne retrouverait plus une fois modifiées), les
+ * consignes du template et les notes longues — celles de Claude comme celles
+ * du catalogue.
+ */
+function ExerciseDetail({ ex }: { ex: EditorExercise }) {
+  const consignes = [
+    ex.repRange && `${ex.repRange} reps`,
+    ex.rpe && `RPE ${ex.rpe}`,
+    ex.rest && `repos ${ex.rest}s`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="mt-2 space-y-1 rounded-md bg-surface-raised px-2.5 py-2 text-xs leading-relaxed">
+      {ex.targetLabel ? (
+        <p className="font-medium text-primary">Objectif : {ex.targetLabel}</p>
+      ) : (
+        ex.targetWeight != null && (
+          <p className="font-medium text-primary">
+            Poids cible : {ex.targetWeight} kg
+          </p>
+        )
+      )}
+      {consignes && <p className="text-muted">Cible : {consignes}</p>}
+      {ex.targetNote && <p className="text-muted">{ex.targetNote}</p>}
+      {ex.note && <p className="text-faint">{ex.note}</p>}
+    </div>
+  );
+}
+
+function HelpSheet({
+  onClose,
+  rpeCol,
+  onToggleRpeCol,
+}: {
+  onClose: () => void;
+  rpeCol: boolean;
+  onToggleRpeCol: () => void;
+}) {
+  return (
+    <Sheet open onClose={onClose} title="Aide">
+      <div className="space-y-4 text-sm leading-relaxed text-muted">
+        <section>
+          <h3 className="mb-1 font-medium text-foreground">Double progression</h3>
+          <p>{PROGRESSION_HINT}</p>
+        </section>
+        <section>
+          <h3 className="mb-1 font-medium text-foreground">
+            Échelle RPE (effort perçu, optionnel)
+          </h3>
+          <p>
+            RPE = reps en réserve. 10 = échec · 9 = 1 rep en réserve · 8 = 2 en
+            réserve (cible du programme) · 7 = 3-4 en réserve. À noter par série
+            si tu veux — jamais obligatoire.
+          </p>
+        </section>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={rpeCol}
+          onClick={onToggleRpeCol}
+          className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-3 text-left"
+        >
+          <span className="font-medium text-foreground">
+            Afficher la colonne RPE
+          </span>
+          <span
+            aria-hidden
+            className={`h-6 w-10 shrink-0 rounded-full border p-0.5 transition-colors ${
+              rpeCol ? "border-primary bg-primary" : "border-border bg-surface-raised"
+            }`}
+          >
+            <span
+              className={`block h-4 w-4 rounded-full transition-transform ${
+                rpeCol ? "translate-x-4 bg-on-primary" : "bg-muted"
+              }`}
+            />
+          </span>
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

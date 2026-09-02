@@ -1,7 +1,14 @@
-// Lot 14 — DOM : l'écran séance rendu (auth réelle) affiche, pour un exo AYANT
-// une cible de poids, à la fois « Dernière fois » ET « Poids cible » ET le RPE
-// cible du template ; pour un exo SANS cible, seulement « Dernière fois ». Et
-// le champ poids réel reste pré-rempli au dernier poids fait (pas la cible).
+// Lot 14 — DOM : la cible de poids posée par Claude est bien portée par
+// l'écran séance, distincte du dernier poids fait.
+//
+// RÉVISÉ AU LOT 19 (décision PO, pas un affaiblissement) : les mêmes faits
+// sont vérifiés à leur NOUVEL emplacement.
+//   - le flux ne garde QU'UNE ligne de contexte (« Dernière ») ; « Poids
+//     cible », la fourchette et le RPE cible sont derrière le ⓘ
+//   - le champ poids est désormais pré-rempli à l'OBJECTIF (la cible), plus au
+//     dernier poids fait : le PO veut viser, pas recopier
+// Ce que le Lot 14 garantissait reste garanti : la cible existe, elle est
+// affichée, elle reste distincte du dernier fait.
 import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
 
 const CIBLE = 67.5;
@@ -48,20 +55,29 @@ try {
   check("section de l'exo avec cible rendue", (await sWith.count()) === 1, withTarget.name);
   check("section de l'exo sans cible rendue", (await sNo.count()) === 1, noTarget.name);
 
-  // Exo AVEC cible : dernier fait + poids cible + RPE cible.
-  check("exo avec cible : « Dernière fois » présent", await sWith.getByText(/Dernière fois/).count() > 0);
-  check("exo avec cible : « Poids cible : 67.5 kg » présent", await sWith.getByText(/Poids cible : 67\.5 kg/).count() > 0);
-  check("exo avec cible : RPE cible du template présent", await sWith.getByText(/RPE\s*\d/).count() > 0);
+  // Flux : UNE seule ligne de contexte, les consignes sont repliées (Lot 19).
+  check("exo avec cible : ligne « Dernière » dans le flux", await sWith.getByText(/Dernière\s*:/).count() > 0);
+  check("exo avec cible : « Poids cible » hors du flux (replié)", (await sWith.getByText(/Poids cible/).count()) === 0);
+  check("exo avec cible : « Cible : » hors du flux (replié)", (await sWith.getByText(/Cible\s*:/).count()) === 0);
+  check("exo avec cible : note longue de Claude hors du flux", (await sWith.getByText(NOTE).count()) === 0);
 
-  // Exo SANS cible : dernier fait seulement, pas de poids cible.
-  check("exo sans cible : « Dernière fois » présent", await sNo.getByText(/Dernière fois/).count() > 0);
-  check("exo sans cible : PAS de « Poids cible »", (await sNo.getByText(/Poids cible/).count()) === 0);
+  // ⓘ : la cible, la fourchette, le RPE cible et la note s'y retrouvent.
+  await sWith.getByLabel(`${withTarget.name} : objectif et consignes`).click();
+  check("ⓘ : objectif chiffré affiché", await sWith.getByText(/Objectif\s*:/).count() > 0);
+  check("ⓘ : cible 67.5 kg retrouvée", await sWith.getByText(/67\.5 kg/).count() > 0);
+  check("ⓘ : RPE cible du template retrouvé", await sWith.getByText(/RPE\s*\d/).count() > 0);
+  check("ⓘ : note de la cible retrouvée", await sWith.getByText(NOTE).count() > 0);
 
-  // Le champ poids réel reste pré-rempli au DERNIER poids fait (pas la cible).
+  // Exo SANS cible : pas de poids cible, même une fois le détail déplié.
+  check("exo sans cible : ligne « Dernière » présente", await sNo.getByText(/Dernière\s*:/).count() > 0);
+  await sNo.getByLabel(`${noTarget.name} : objectif et consignes`).click();
+  check("exo sans cible : PAS de « Poids cible » même déplié", (await sNo.getByText(/Poids cible/).count()) === 0);
+
+  // Lot 19 : le champ poids porte l'OBJECTIF (la cible), plus le dernier fait.
   const weightInput = page.locator(`input[aria-label="${withTarget.name} série 1 poids"]`).first();
   const val = await weightInput.inputValue();
-  check("champ poids pré-rempli non vide (dernier poids fait)", val.trim() !== "");
-  check("champ poids ≠ cible (67.5) — la cible n'est pas imposée", val.trim() !== String(CIBLE));
+  check("champ poids pré-rempli non vide", val.trim() !== "");
+  check("champ poids = cible (67.5) — objectif dans les cases", val.trim() === String(CIBLE), val);
 } catch (e) {
   console.error("  FAIL", e.message);
   process.exitCode = 1;

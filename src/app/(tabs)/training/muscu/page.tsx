@@ -2,6 +2,11 @@ import { notFound } from "next/navigation";
 import { brusselsDay, isIsoDate } from "@/lib/brussels-day.mjs";
 import { summarizeSets } from "@/lib/last-sets.mjs";
 import {
+  formatTarget,
+  sessionTarget,
+  targetRows,
+} from "@/lib/session-target.mjs";
+import {
   getExerciseCatalog,
   getLastSets,
   getTemplate,
@@ -99,16 +104,17 @@ export default async function MuscuSessionPage({
     const lastSets = await getLastSets(exercises.map((t) => t.exercise_id));
     initialExercises = exercises.map((tex) => {
       const last = lastSets.get(tex.exercise_id);
-      const base = last?.sets.length
-        ? setsToDraft(last.sets)
-        : {
-            assist: false,
-            rows: Array.from({ length: tex.default_sets ?? 3 }, () => ({
-              reps: tex.default_reps_min == null ? "" : String(tex.default_reps_min),
-              weight: "",
-              rpe: "",
-            })),
-          };
+      // Lot 19 : les cases portent l'OBJECTIF du jour (template + cible Claude
+      // + dernière perf), plus la dernière perf recopiée telle quelle.
+      const target = sessionTarget({
+        defaults: {
+          sets: tex.default_sets,
+          repsMin: tex.default_reps_min,
+          repsMax: tex.default_reps_max,
+        },
+        targetWeight: tex.exercise.target_weight_kg,
+        last: last ?? null,
+      });
       return {
         key: `tpl-${tex.position}`,
         exerciseId: tex.exercise_id,
@@ -124,8 +130,9 @@ export default async function MuscuSessionPage({
         refDate: last?.workout_date ?? null,
         targetWeight: tex.exercise.target_weight_kg,
         targetNote: tex.exercise.target_weight_note,
-        assist: base.assist,
-        sets: base.rows,
+        targetLabel: formatTarget(target),
+        assist: target.assist,
+        sets: targetRows(target),
       };
     });
   }

@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isIsoDate } from "@/lib/brussels-day.mjs";
+import { summarizeSets } from "@/lib/last-sets.mjs";
+import {
+  formatTarget,
+  sessionTarget,
+  targetRows,
+} from "@/lib/session-target.mjs";
+import { getExerciseContext } from "@/lib/training-server";
 import { RUN_TYPES, type RunType, type WorkoutType } from "@/lib/training";
 
 export type SaveResult = { error: string } | { ok: true; id: string };
@@ -23,6 +30,59 @@ export type DraftExercise = {
   note?: string | null;
   sets: DraftSet[];
 };
+
+/**
+ * Lot 20 : tout ce qu'il faut pour insérer un exercice EN COURS de séance avec
+ * les mêmes informations qu'un exercice de template — objectif dans les cases,
+ * ligne « Dernière », consignes derrière le ⓘ. Avant, il arrivait vide.
+ */
+export type ExercisePrefill = {
+  exerciseId: string;
+  name: string;
+  note: string | null;
+  repRange: string | null;
+  rpe: number | null;
+  rest: number | null;
+  refSummary: string | null;
+  refDate: string | null;
+  targetWeight: number | null;
+  targetNote: string | null;
+  targetLabel: string | null;
+  assist: boolean;
+  sets: { reps: string; weight: string; rpe: string }[];
+};
+
+export async function getExercisePrefill(
+  exerciseId: string
+): Promise<ExercisePrefill | null> {
+  const ctx = await getExerciseContext(exerciseId);
+  if (!ctx) return null;
+  const { exercise, defaults, last } = ctx;
+  const target = sessionTarget({
+    defaults,
+    targetWeight: exercise.target_weight_kg,
+    last,
+  });
+
+  return {
+    exerciseId: exercise.id,
+    name: exercise.name,
+    note: exercise.note,
+    repRange:
+      defaults?.repsMin != null && defaults.repsMax != null
+        ? `${defaults.repsMin}-${defaults.repsMax}`
+        : null,
+    rpe: defaults?.rpe ?? null,
+    rest: defaults?.rest ?? null,
+    refSummary: last?.sets.length ? summarizeSets(last.sets) : null,
+    refDate: last?.workout_date ?? null,
+    targetWeight: exercise.target_weight_kg,
+    targetNote: exercise.target_weight_note,
+    targetLabel: formatTarget(target),
+    assist: target.assist,
+    sets: targetRows(target),
+  };
+}
 
 async function resolveExerciseId(
   supabase: Awaited<ReturnType<typeof createClient>>,

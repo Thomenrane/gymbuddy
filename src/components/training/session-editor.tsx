@@ -14,6 +14,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  CircleNotch,
   Info,
   NotePencil,
   Plus,
@@ -21,7 +22,11 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
-import { saveWorkout, type DraftExercise } from "@/app/(tabs)/training/training-actions";
+import {
+  getExercisePrefill,
+  saveWorkout,
+  type DraftExercise,
+} from "@/app/(tabs)/training/training-actions";
 import { PROGRESSION_HINT } from "@/lib/training";
 
 export type EditorExercise = {
@@ -122,6 +127,8 @@ export function SessionEditor({
   // Colonne RPE masquée par défaut : un tiers de la largeur pour un champ
   // rarement rempli. Préférence globale, mémorisée localement.
   const rpeCol = useSyncExternalStore(rpeColStore.subscribe, rpeColStore.get, () => false);
+  // Exercice en cours de chargement dans la sheet « Ajouter » (Lot 20).
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const startedAt = useRef(Date.now());
   // Une séance déjà notée en RPE (édition) affiche la colonne quoi qu'il arrive :
   // on ne masque jamais une donnée saisie.
@@ -170,6 +177,41 @@ export function SessionEditor({
     setExercises((prev) =>
       prev.map((ex) => (ex.key === key ? { ...ex, ...patch } : ex))
     );
+  }
+
+  /**
+   * Lot 20 : un exercice ajouté en cours de séance arrive avec les mêmes
+   * informations qu'un exercice de template (objectif dans les cases, ligne
+   * « Dernière », consignes derrière le ⓘ). Un exercice créé à la volée — ou
+   * dont la lecture échoue — garde l'ancien comportement : 3 séries vides,
+   * aucun chiffre inventé.
+   */
+  async function pickExercise(item: { id?: string; name: string; note: string | null }) {
+    const blank: EditorExercise = {
+      key: `add-${Date.now()}`,
+      exerciseId: item.id,
+      name: item.name,
+      note: item.note,
+      assist: false,
+      sets: [
+        { reps: "", weight: "", rpe: "" },
+        { reps: "", weight: "", rpe: "" },
+        { reps: "", weight: "", rpe: "" },
+      ],
+    };
+    if (!item.id) {
+      setExercises((prev) => [...prev, blank]);
+      setAddOpen(false);
+      return;
+    }
+    setPendingId(item.id);
+    const prefill = await getExercisePrefill(item.id).catch(() => null);
+    setExercises((prev) => [
+      ...prev,
+      prefill ? { ...prefill, key: blank.key } : blank,
+    ]);
+    setPendingId(null);
+    setAddOpen(false);
   }
 
   function move(key: string, delta: -1 | 1) {
@@ -441,25 +483,9 @@ export function SessionEditor({
       {addOpen && (
         <AddExerciseSheet
           catalog={catalog}
+          pendingId={pendingId}
           onClose={() => setAddOpen(false)}
-          onPick={(item) => {
-            setExercises((prev) => [
-              ...prev,
-              {
-                key: `add-${Date.now()}`,
-                exerciseId: item.id,
-                name: item.name,
-                note: item.note,
-                assist: false,
-                sets: [
-                  { reps: "", weight: "", rpe: "" },
-                  { reps: "", weight: "", rpe: "" },
-                  { reps: "", weight: "", rpe: "" },
-                ],
-              },
-            ]);
-            setAddOpen(false);
-          }}
+          onPick={pickExercise}
         />
       )}
 
@@ -637,24 +663,29 @@ function IconBtn({
   );
 }
 
+/** « Développé décliné » trouvable en tapant « decline » (sans accents). */
+const searchKey = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 export function AddExerciseSheet({
   catalog,
   onClose,
   onPick,
+  pendingId = null,
 }: {
   catalog: CatalogItem[];
   onClose: () => void;
   onPick: (item: { id?: string; name: string; note: string | null }) => void;
+  /** Exercice dont le pré-remplissage est en cours de lecture (Lot 20). */
+  pendingId?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q
-      ? catalog.filter((c) => c.name.toLowerCase().includes(q))
-      : catalog;
+    const q = searchKey(query.trim());
+    return q ? catalog.filter((c) => searchKey(c.name).includes(q)) : catalog;
   }, [catalog, query]);
   const exactMatch = catalog.some(
-    (c) => c.name.toLowerCase() === query.trim().toLowerCase()
+    (c) => searchKey(c.name) === searchKey(query.trim())
   );
 
   return (
@@ -668,17 +699,29 @@ export function AddExerciseSheet({
           onChange={(e) => setQuery(e.target.value)}
           className="h-12 w-full rounded-md border border-border bg-surface px-3 text-base outline-none placeholder:text-muted focus:border-muted"
         />
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul
+          aria-busy={pendingId != null}
+          className="divide-y divide-border rounded-md border border-border"
+        >
           {filtered.map((c) => (
             <li key={c.id}>
               <button
                 type="button"
+                disabled={pendingId != null}
                 onClick={() => onPick(c)}
-                className="flex w-full items-baseline justify-between px-3 py-3 text-left active:bg-surface"
+                className="flex w-full items-baseline justify-between px-3 py-3 text-left active:bg-surface disabled:opacity-50"
               >
                 <span>{c.name}</span>
-                {c.note && (
-                  <span className="ml-2 shrink-0 text-xs text-faint">{c.note}</span>
+                {pendingId === c.id ? (
+                  <CircleNotch
+                    size={16}
+                    aria-label="Chargement de l'objectif"
+                    className="ml-2 shrink-0 animate-spin text-muted"
+                  />
+                ) : (
+                  c.note && (
+                    <span className="ml-2 shrink-0 text-xs text-faint">{c.note}</span>
+                  )
                 )}
               </button>
             </li>

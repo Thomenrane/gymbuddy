@@ -79,6 +79,72 @@ export async function getExerciseCatalog(): Promise<Exercise[]> {
 }
 
 /**
+ * Contexte complet d'UN exercice, pour l'ajouter en cours de séance avec les
+ * mêmes informations qu'un exercice de template (Lot 20) : ses consignes, sa
+ * cible de poids et sa dernière perf.
+ *
+ * Les consignes (séries, fourchette, RPE, repos) sont une propriété du
+ * TEMPLATE, pas de l'exercice : on prend celles du template actif qui le
+ * contient, par ordre alphabétique quand il y en a plusieurs (déterministe).
+ * Aucun template → pas de consignes, on retombe sur la dernière perf.
+ */
+export async function getExerciseContext(exerciseId: string): Promise<{
+  exercise: Exercise;
+  defaults: TemplateDefaults | null;
+  last: LastSets | null;
+} | null> {
+  const supabase = await createClient();
+  const [exerciseRes, templateRes, lastMap] = await Promise.all([
+    supabase.from("exercises").select("*").eq("id", exerciseId).maybeSingle(),
+    supabase
+      .from("template_exercises")
+      .select(
+        "default_sets, default_reps_min, default_reps_max, target_rpe, rest_seconds, template:workout_templates!inner(name, is_active)"
+      )
+      .eq("exercise_id", exerciseId)
+      .eq("template.is_active", true),
+    getLastSets([exerciseId]),
+  ]);
+  if (!exerciseRes.data) return null;
+
+  const rows = (templateRes.data ?? []) as unknown as TemplateDefaultsRow[];
+  const pick = [...rows].sort((a, b) =>
+    (a.template?.name ?? "").localeCompare(b.template?.name ?? "")
+  )[0];
+
+  return {
+    exercise: exerciseRes.data as Exercise,
+    defaults: pick
+      ? {
+          sets: pick.default_sets,
+          repsMin: pick.default_reps_min,
+          repsMax: pick.default_reps_max,
+          rpe: pick.target_rpe,
+          rest: pick.rest_seconds,
+        }
+      : null,
+    last: lastMap.get(exerciseId) ?? null,
+  };
+}
+
+export type TemplateDefaults = {
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+  rpe: number | null;
+  rest: number | null;
+};
+
+type TemplateDefaultsRow = {
+  default_sets: number | null;
+  default_reps_min: number | null;
+  default_reps_max: number | null;
+  target_rpe: number | null;
+  rest_seconds: number | null;
+  template: { name: string; is_active: boolean } | null;
+};
+
+/**
  * Référence "dernière fois" pour chaque exercice demandé : les sets de son
  * workout le plus récent (baselines comprises). Cœur du pré-remplissage.
  */

@@ -3,6 +3,7 @@ import { ArrowSquareOut, CaretLeft, CaretRight, Plus, Notebook } from "@phosphor
 import { brusselsDay, isIsoDate } from "@/lib/brussels-day.mjs";
 import { getDayWorkouts, getMonthWorkouts } from "@/lib/training-server";
 import { WorkoutCard } from "@/components/training/workout-card";
+import { ResumeCard } from "@/components/training/resume-card";
 import type { WorkoutType } from "@/lib/training";
 
 export const dynamic = "force-dynamic";
@@ -145,6 +146,11 @@ export default async function TrainingPage({
           <span className="h-0.5 w-2 rounded-full bg-muted" /> padel/autre
         </span>
       </p>
+
+      {/* Lot 22 : une séance commencée puis quittée reste visible ici, où qu'on
+          en soit dans le calendrier — c'est le seul endroit où elle existe
+          encore (elle n'est pas en base tant qu'elle n'est pas terminée). */}
+      <ResumeCard today={today} />
 
       {/* Aperçu inline de la séance du jour sélectionné : plus besoin d'ouvrir
           la vue jour pour un simple coup d'œil. Le lien mène au détail complet. */}

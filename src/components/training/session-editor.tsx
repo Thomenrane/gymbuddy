@@ -28,6 +28,8 @@ import {
   type DraftExercise,
 } from "@/app/(tabs)/training/training-actions";
 import { PROGRESSION_HINT } from "@/lib/training";
+import { draftKeyOf, draftProgress } from "@/lib/session-draft.mjs";
+import { draftsStore } from "@/lib/session-drafts-store";
 
 export type EditorExercise = {
   key: string;
@@ -51,7 +53,9 @@ export type EditorExercise = {
   // tenir propre") — facultative, jamais bloquante. Distincte de `note`
   // (convention catalogue) et de la note de séance globale.
   sessionNote?: string;
-  sets: { reps: string; weight: string; rpe: string }[];
+  // `touched` (Lot 22) : la série a été saisie à la main. Depuis le Lot 19 les
+  // cases arrivent pré-remplies, donc « remplie » ne veut plus dire « faite ».
+  sets: { reps: string; weight: string; rpe: string; touched?: boolean }[];
 };
 
 type CatalogItem = { id: string; name: string; note: string | null };
@@ -113,7 +117,7 @@ export function SessionEditor({
   initialMeta?: { duration: string; intensity: number | null; notes: string };
 }) {
   const router = useRouter();
-  const draftKey = `gb-session-${editId ?? templateId ?? "vierge"}-${date}`;
+  const draftKey = draftKeyOf({ editId, templateId, date });
   const [exercises, setExercises] = useState(initialExercises);
   const [restored, setRestored] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -129,7 +133,13 @@ export function SessionEditor({
   const rpeCol = useSyncExternalStore(rpeColStore.subscribe, rpeColStore.get, () => false);
   // Exercice en cours de chargement dans la sheet « Ajouter » (Lot 20).
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // Compteur d'ajouts : donne une clé React unique sans horloge (une clé
+  // dérivée de Date.now() est impure et casserait un rendu concurrent).
+  const [addSeq, setAddSeq] = useState(0);
   const startedAt = useRef(Date.now());
+  // Lot 22 : rien n'est écrit tant que le PO n'a pas saisi quelque chose —
+  // ouvrir une séance puis repartir ne doit PAS créer de brouillon fantôme.
+  const dirty = useRef(false);
   // Une séance déjà notée en RPE (édition) affiche la colonne quoi qu'il arrive :
   // on ne masque jamais une donnée saisie.
   const rpeVisible =
@@ -140,43 +150,86 @@ export function SessionEditor({
 
   // Persistance locale : une séance en cours ne doit JAMAIS être perdue.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(draftKey);
-      if (raw) {
-        const draft = JSON.parse(raw);
-        if (Array.isArray(draft.exercises) && draft.exercises.length > 0) {
-          setExercises(draft.exercises);
-          startedAt.current = draft.startedAt ?? Date.now();
-          setRestored(true);
+    const stored = draftsStore.get()[draftKey];
+    let saved = stored?.exercises as EditorExercise[] | undefined;
+    let since = stored?.startedAt;
+    if (!saved) {
+      // Repli sur l'ancien format (une clé par séance), et SEULEMENT s'il porte
+      // une vraie saisie : un brouillon fantôme d'avant le Lot 22 ré-imposerait
+      // l'ancien pré-remplissage (dernière perf) à la place de l'objectif.
+      try {
+        const raw = localStorage.getItem(draftKey);
+        const legacy = raw ? JSON.parse(raw) : null;
+        if (legacy && draftProgress(legacy.exercises).done > 0) {
+          saved = legacy.exercises;
+          since = legacy.startedAt;
         }
+      } catch {
+        /* draft illisible : on repart du pré-rempli */
       }
-    } catch {
-      /* draft illisible : on repart du pré-rempli */
+    }
+    if (Array.isArray(saved) && saved.length > 0) {
+      setExercises(saved);
+      startedAt.current = since ?? Date.now();
+      setRestored(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Écrit à chaque changement, mais seulement une fois la séance commencée.
   useEffect(() => {
+    if (!dirty.current) return;
+    draftsStore.save({
+      key: draftKey,
+      title,
+      date,
+      templateId,
+      editId,
+      startedAt: startedAt.current,
+      updatedAt: Date.now(),
+      exercises,
+    });
+  }, [exercises, draftKey, title, date, templateId, editId]);
+
+  function forgetDraft() {
+    draftsStore.remove(draftKey);
     try {
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({ exercises, startedAt: startedAt.current })
-      );
+      localStorage.removeItem(draftKey); // ancien format
     } catch {
-      /* stockage plein : tant pis, l'état React reste */
+      /* rien à nettoyer */
     }
-  }, [exercises, draftKey]);
+    dirty.current = false;
+  }
 
   function resetDraft() {
-    localStorage.removeItem(draftKey);
+    forgetDraft();
     setExercises(initialExercises);
     setRestored(false);
   }
 
+  /** Toute modification VOLONTAIRE passe par ici : c'est ce qui rend le
+   *  brouillon réel, et donc la séance « reprenable » depuis l'onglet Training. */
+  function mutate(next: (prev: EditorExercise[]) => EditorExercise[]) {
+    dirty.current = true;
+    setExercises(next);
+  }
+
   function patchExercise(key: string, patch: Partial<EditorExercise>) {
-    setExercises((prev) =>
-      prev.map((ex) => (ex.key === key ? { ...ex, ...patch } : ex))
-    );
+    mutate((prev) => prev.map((ex) => (ex.key === key ? { ...ex, ...patch } : ex)));
+  }
+
+  /** Saisie d'une case : la série est marquée « touchée » (progression). */
+  function patchSet(
+    ex: EditorExercise,
+    index: number,
+    field: "reps" | "weight" | "rpe",
+    value: string
+  ) {
+    patchExercise(ex.key, {
+      sets: ex.sets.map((s, j) =>
+        j === index ? { ...s, [field]: value, touched: true } : s
+      ),
+    });
   }
 
   /**
@@ -187,8 +240,9 @@ export function SessionEditor({
    * aucun chiffre inventé.
    */
   async function pickExercise(item: { id?: string; name: string; note: string | null }) {
+    setAddSeq(addSeq + 1);
     const blank: EditorExercise = {
-      key: `add-${Date.now()}`,
+      key: `add-${addSeq}`,
       exerciseId: item.id,
       name: item.name,
       note: item.note,
@@ -200,22 +254,19 @@ export function SessionEditor({
       ],
     };
     if (!item.id) {
-      setExercises((prev) => [...prev, blank]);
+      mutate((prev) => [...prev, blank]);
       setAddOpen(false);
       return;
     }
     setPendingId(item.id);
     const prefill = await getExercisePrefill(item.id).catch(() => null);
-    setExercises((prev) => [
-      ...prev,
-      prefill ? { ...prefill, key: blank.key } : blank,
-    ]);
+    mutate((prev) => [...prev, prefill ? { ...prefill, key: blank.key } : blank]);
     setPendingId(null);
     setAddOpen(false);
   }
 
   function move(key: string, delta: -1 | 1) {
-    setExercises((prev) => {
+    mutate((prev) => {
       const i = prev.findIndex((e) => e.key === key);
       const j = i + delta;
       if (i < 0 || j < 0 || j >= prev.length) return prev;
@@ -310,9 +361,7 @@ export function SessionEditor({
                 </IconBtn>
                 <IconBtn
                   label={`Retirer ${ex.name}`}
-                  onClick={() =>
-                    setExercises((prev) => prev.filter((e) => e.key !== ex.key))
-                  }
+                  onClick={() => mutate((prev) => prev.filter((e) => e.key !== ex.key))}
                 >
                   <X size={16} />
                 </IconBtn>
@@ -338,13 +387,7 @@ export function SessionEditor({
                     aria-label={`${ex.name} série ${i + 1} reps`}
                     inputMode="numeric"
                     value={set.reps}
-                    onChange={(e) =>
-                      patchExercise(ex.key, {
-                        sets: ex.sets.map((s, j) =>
-                          j === i ? { ...s, reps: e.target.value } : s
-                        ),
-                      })
-                    }
+                    onChange={(e) => patchSet(ex, i, "reps", e.target.value)}
                     className={inputCls}
                   />
                   <input
@@ -352,13 +395,7 @@ export function SessionEditor({
                     inputMode="decimal"
                     placeholder="PDC"
                     value={set.weight}
-                    onChange={(e) =>
-                      patchExercise(ex.key, {
-                        sets: ex.sets.map((s, j) =>
-                          j === i ? { ...s, weight: e.target.value } : s
-                        ),
-                      })
-                    }
+                    onChange={(e) => patchSet(ex, i, "weight", e.target.value)}
                     className={inputCls}
                   />
                   {/* RPE ressenti optionnel : placeholder = RPE cible s'il existe.
@@ -371,13 +408,7 @@ export function SessionEditor({
                       inputMode="decimal"
                       placeholder={ex.rpe ? String(ex.rpe) : "–"}
                       value={set.rpe}
-                      onChange={(e) =>
-                        patchExercise(ex.key, {
-                          sets: ex.sets.map((s, j) =>
-                            j === i ? { ...s, rpe: e.target.value } : s
-                          ),
-                        })
-                      }
+                      onChange={(e) => patchSet(ex, i, "rpe", e.target.value)}
                       className={`${inputCls} px-1 text-sm text-muted`}
                     />
                   )}
@@ -529,7 +560,7 @@ export function SessionEditor({
               exercises: payload,
             });
             if ("error" in res) return res.error;
-            localStorage.removeItem(draftKey);
+            forgetDraft();
             router.push(`/training/${res.id}`);
             return null;
           }}

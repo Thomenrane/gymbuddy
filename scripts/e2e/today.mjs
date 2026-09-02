@@ -23,7 +23,7 @@ await rest("POST", "meal_logs", {
 const { browser, page } = await authedBrowser();
 try {
   // --- Écran Aujourd'hui authentifié ---
-  await page.goto(`${BASE}/?date=${D}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/journal?date=${D}`, { waitUntil: "networkidle" });
   check("écran Aujourd'hui chargé (pas redirigé vers login)", !page.url().includes("/login"));
 
   // --- 1. Widget de pesée : visible, cliquable, écrit en base ---
@@ -50,7 +50,7 @@ try {
   check("fiche recette affiche le nom de la recette", (await page.content()).includes(pd1.name));
 
   // --- 3. Log libre : sheet SANS lien recette ---
-  await page.goto(`${BASE}/?date=${D}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/journal?date=${D}`, { waitUntil: "networkidle" });
   await page.getByText("__E2E_LIBRE__").click();
   const freeSheet = page.getByRole("dialog");
   await freeSheet.waitFor({ state: "visible", timeout: 5000 });
@@ -61,7 +61,7 @@ try {
   await page.keyboard.press("Escape").catch(() => {});
 
   // --- 4. Swipe entre jours : sur aujourd'hui, swipe → recule d'un jour ---
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/journal`, { waitUntil: "networkidle" });
   const before = page.url();
   await swipe(page, "main", 140); // swipe vers la droite = jour précédent
   await page.waitForURL(/\?date=\d{4}-\d{2}-\d{2}/, { timeout: 8000 }).catch(() => {});

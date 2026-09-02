@@ -25,7 +25,7 @@ export default async function ReglagesPage() {
         className="inline-flex items-center gap-1.5 text-sm text-muted"
       >
         <ArrowLeft size={16} aria-hidden />
-        Aujourd&apos;hui
+        Plan
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">Réglages</h1>
 

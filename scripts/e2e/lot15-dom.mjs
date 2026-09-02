@@ -35,7 +35,7 @@ try {
 
   const { browser: b, page } = await authedBrowser();
   browser = b;
-  await page.goto(`${BASE}/plan?week=${MON}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/?week=${MON}`, { waitUntil: "networkidle" });
 
   // Ouvre la sheet du repas planifié (bouton contenant le nom de la recette).
   await page.locator("button", { hasText: recipe.name }).first().click();

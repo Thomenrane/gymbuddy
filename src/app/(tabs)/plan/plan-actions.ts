@@ -14,8 +14,8 @@ function bad(error: string): ActionResult {
 }
 
 function revalidate() {
-  revalidatePath("/plan");
   revalidatePath("/");
+  revalidatePath("/journal");
 }
 
 /** Planifie un plat : upsert sur (plan_date, slot) = REMPLACEMENT (FLAG 8). */

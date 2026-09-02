@@ -8,7 +8,7 @@
 // longue, un historique 3×6 @ 67,5 et un template 4 séries / 4-6 reps / RPE 8 /
 // repos 150 s. Objectif attendu = 4×6 @ 67.5 kg (charge inchangée → on garde le
 // haut de fourchette déjà tenu). Nettoyage complet en sortie.
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D_HIST = "1999-12-17";
 const D_SESS = "1999-12-20";
@@ -21,8 +21,8 @@ async function cleanup() {
   for (const d of [D_HIST, D_SESS]) {
     await rest("DELETE", `workouts?workout_date=eq.${d}`).catch(() => {});
   }
-  await rest("DELETE", `workout_templates?name=like.__OBJ_DOM_%`).catch(() => {});
-  await rest("DELETE", `exercises?name=like.__OBJ_DOM_%`).catch(() => {});
+  await deleteByNames("workout_templates", ["__OBJ_DOM_TPL__"]);
+  await deleteByNames("exercises", [EXO]);
 }
 
 let browser;

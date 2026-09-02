@@ -11,7 +11,7 @@
 //     pré-remplies à l'objectif + ligne « Dernière »
 //   - exercice CRÉÉ À LA VOLÉE → 3 séries vides, aucune ligne trompeuse
 // Bonus : la recherche ignore les accents (« elevation » trouve « Élévation »).
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D_HIST = "1999-12-16";
 const D_SESS = "1999-12-21";
@@ -22,7 +22,7 @@ async function cleanup() {
   for (const d of [D_HIST, D_SESS]) {
     await rest("DELETE", `workouts?workout_date=eq.${d}`).catch(() => {});
   }
-  await rest("DELETE", `exercises?name=like.__OBJ_ADD_%`).catch(() => {});
+  await deleteByNames("exercises", [EXO, NEUF]);
 }
 
 let browser;

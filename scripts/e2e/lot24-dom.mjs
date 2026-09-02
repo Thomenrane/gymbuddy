@@ -4,7 +4,7 @@
 //   - `rest_seconds` du template n'était qu'un texte affiché, aucun chrono
 //   - saisir « 67.5 » au clavier numérique entre deux séries est le vrai frein
 //   - l'écran s'éteint pendant le repos et il faut déverrouiller à chaque série
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D_SESS = "1999-12-23";
 const EXO = "__CONFORT_DOM__";
@@ -12,8 +12,8 @@ const REPOS = 150;
 
 async function cleanup() {
   await rest("DELETE", `workouts?workout_date=eq.${D_SESS}`).catch(() => {});
-  await rest("DELETE", `workout_templates?name=like.__CONFORT_%`).catch(() => {});
-  await rest("DELETE", `exercises?name=like.__CONFORT_%`).catch(() => {});
+  await deleteByNames("workout_templates", ["__CONFORT_TPL__"]);
+  await deleteByNames("exercises", [EXO]);
 }
 
 let browser;

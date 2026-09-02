@@ -5,7 +5,7 @@
 //   2. la « dernière fois » reste juste quel que soit le chemin actif (RPC
 //      latest_sets_by_exercise si la migration est appliquée, ancienne requête
 //      sinon) : c'est ce qui rend le repli sûr
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D_HIST = "1999-12-24";
 const D_SESS = "1999-12-25";
@@ -15,8 +15,8 @@ async function cleanup() {
   for (const d of [D_HIST, D_SESS]) {
     await rest("DELETE", `workouts?workout_date=eq.${d}`).catch(() => {});
   }
-  await rest("DELETE", `workout_templates?name=like.__RELECTURE_%`).catch(() => {});
-  await rest("DELETE", `exercises?name=like.__RELECTURE_%`).catch(() => {});
+  await deleteByNames("workout_templates", ["__RELECTURE_TPL__"]);
+  await deleteByNames("exercises", [EXO]);
 }
 
 let browser;

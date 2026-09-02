@@ -9,15 +9,15 @@
 //   2. saisir une série puis quitter → indicateur avec la progression, et le
 //      lien ramène la séance dans l'état exact où elle a été laissée
 //   3. « Abandonner » efface le brouillon, et terminer la séance aussi
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D_SESS = "1999-12-22";
 const EXO = "__RESUME_DOM__";
 
 async function cleanup() {
   await rest("DELETE", `workouts?workout_date=eq.${D_SESS}`).catch(() => {});
-  await rest("DELETE", `workout_templates?name=like.__RESUME_%`).catch(() => {});
-  await rest("DELETE", `exercises?name=like.__RESUME_%`).catch(() => {});
+  await deleteByNames("workout_templates", ["__RESUME_TPL__"]);
+  await deleteByNames("exercises", [EXO]);
 }
 
 let browser;

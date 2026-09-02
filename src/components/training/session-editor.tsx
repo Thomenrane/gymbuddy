@@ -19,6 +19,7 @@ import {
   NotePencil,
   Plus,
   Question,
+  Timer,
   X,
 } from "@phosphor-icons/react";
 import { Sheet } from "@/components/ui/sheet";
@@ -30,6 +31,9 @@ import {
 import { PROGRESSION_HINT } from "@/lib/training";
 import { draftKeyOf, draftProgress } from "@/lib/session-draft.mjs";
 import { draftsStore } from "@/lib/session-drafts-store";
+import { stepValue } from "@/lib/session-controls.mjs";
+import { useWakeLock } from "@/lib/use-wake-lock";
+import { RestTimer } from "./rest-timer";
 
 export type EditorExercise = {
   key: string;
@@ -64,6 +68,9 @@ const inputCls =
   "h-11 w-full rounded-md border border-border bg-surface-raised px-2.5 text-center text-base outline-none focus:border-muted";
 
 const RPE_COL_KEY = "gb-rpe-col";
+
+/** Ligne des boutons ± sous la case en cours de saisie (Lot 24). */
+const stepRowCls = "mt-1 flex gap-1.5";
 
 /**
  * Préférence « colonne RPE visible », lue dans localStorage sans setState dans
@@ -136,6 +143,14 @@ export function SessionEditor({
   // Compteur d'ajouts : donne une clé React unique sans horloge (une clé
   // dérivée de Date.now() est impure et casserait un rendu concurrent).
   const [addSeq, setAddSeq] = useState(0);
+  // Lot 24 : repos en cours (échéance absolue) et case actuellement saisie,
+  // au-dessus de laquelle s'affichent les boutons ±.
+  const [rest, setRest] = useState<{ endsAt: number; total: number } | null>(null);
+  const [focused, setFocused] = useState<{
+    key: string;
+    index: number;
+    field: "reps" | "weight";
+  } | null>(null);
   const startedAt = useRef(Date.now());
   // Lot 22 : rien n'est écrit tant que le PO n'a pas saisi quelque chose —
   // ouvrir une séance puis repartir ne doit PAS créer de brouillon fantôme.
@@ -144,6 +159,8 @@ export function SessionEditor({
   // on ne masque jamais une donnée saisie.
   const rpeVisible =
     rpeCol || exercises.some((ex) => ex.sets.some((s) => s.rpe.trim() !== ""));
+  // L'écran reste allumé tant que la séance est ouverte (Lot 24).
+  useWakeLock(true);
   const gridCls = rpeVisible
     ? "grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5"
     : "grid grid-cols-[1.5rem_1fr_1fr_2rem] items-center gap-1.5";
@@ -263,6 +280,14 @@ export function SessionEditor({
     mutate((prev) => [...prev, prefill ? { ...prefill, key: blank.key } : blank]);
     setPendingId(null);
     setAddOpen(false);
+  }
+
+  /** Boutons ± : ajuste la case saisie sans repasser par le clavier. */
+  function stepFocused(delta: number) {
+    if (!focused) return;
+    const ex = exercises.find((e) => e.key === focused.key);
+    if (!ex) return;
+    patchSet(ex, focused.index, focused.field, stepValue(ex.sets[focused.index]?.[focused.field], delta));
   }
 
   function move(key: string, delta: -1 | 1) {
@@ -387,6 +412,8 @@ export function SessionEditor({
                     aria-label={`${ex.name} série ${i + 1} reps`}
                     inputMode="numeric"
                     value={set.reps}
+                    onFocus={() => setFocused({ key: ex.key, index: i, field: "reps" })}
+                    onBlur={() => setFocused(null)}
                     onChange={(e) => patchSet(ex, i, "reps", e.target.value)}
                     className={inputCls}
                   />
@@ -395,6 +422,8 @@ export function SessionEditor({
                     inputMode="decimal"
                     placeholder="PDC"
                     value={set.weight}
+                    onFocus={() => setFocused({ key: ex.key, index: i, field: "weight" })}
+                    onBlur={() => setFocused(null)}
                     onChange={(e) => patchSet(ex, i, "weight", e.target.value)}
                     className={inputCls}
                   />
@@ -422,6 +451,35 @@ export function SessionEditor({
                   >
                     <X size={16} />
                   </IconBtn>
+                  {/* Lot 24 : ajustement au pouce de la case en cours de
+                      saisie — taper « 67.5 » au clavier numérique avec les
+                      mains moites est le vrai frein en salle. N'apparaît que
+                      sous la case active, donc la densité gagnée au Lot 19
+                      reste intacte. */}
+                  {focused?.key === ex.key && focused.index === i && (
+                    <div className={`col-span-full ${stepRowCls}`}>
+                      {(focused.field === "reps"
+                        ? [-1, 1]
+                        : [-2.5, 2.5]
+                      ).map((delta) => (
+                        <button
+                          key={delta}
+                          type="button"
+                          aria-label={`${delta > 0 ? "Augmenter" : "Diminuer"} ${
+                            focused.field === "reps" ? "les reps" : "le poids"
+                          } de ${Math.abs(delta)}`}
+                          // Garde le focus dans la case : sans ça, le blur
+                          // ferme cette ligne avant que le clic n'arrive.
+                          onPointerDown={(e) => e.preventDefault()}
+                          onClick={() => stepFocused(delta)}
+                          className="h-9 flex-1 rounded-md border border-border bg-surface-raised text-sm font-medium text-muted active:bg-surface"
+                        >
+                          {delta > 0 ? "+" : "−"}
+                          {String(Math.abs(delta)).replace(".", ",")}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -458,6 +516,18 @@ export function SessionEditor({
               >
                 assistance
               </button>
+              {/* Lot 24 : `rest_seconds` du template n'était qu'un texte
+                  affiché. Le bouton lance enfin le compte à rebours. */}
+              {ex.rest != null && ex.rest > 0 && (
+                <IconBtn
+                  label={`Lancer le repos de ${ex.rest}s`}
+                  onClick={() =>
+                    setRest({ endsAt: Date.now() + ex.rest! * 1000, total: ex.rest! })
+                  }
+                >
+                  <Timer size={16} />
+                </IconBtn>
+              )}
               <IconBtn
                 label={`${ex.name} : note d'exercice (optionnel)`}
                 onClick={() =>
@@ -502,6 +572,16 @@ export function SessionEditor({
       >
         Terminer la séance
       </button>
+
+      {rest && (
+        <RestTimer
+          key={rest.endsAt}
+          endsAt={rest.endsAt}
+          total={rest.total}
+          onDone={() => setRest(null)}
+          onCancel={() => setRest(null)}
+        />
+      )}
 
       {helpOpen && (
         <HelpSheet

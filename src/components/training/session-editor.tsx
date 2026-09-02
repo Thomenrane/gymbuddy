@@ -413,7 +413,6 @@ export function SessionEditor({
                     inputMode="numeric"
                     value={set.reps}
                     onFocus={() => setFocused({ key: ex.key, index: i, field: "reps" })}
-                    onBlur={() => setFocused(null)}
                     onChange={(e) => patchSet(ex, i, "reps", e.target.value)}
                     className={inputCls}
                   />
@@ -423,7 +422,6 @@ export function SessionEditor({
                     placeholder="PDC"
                     value={set.weight}
                     onFocus={() => setFocused({ key: ex.key, index: i, field: "weight" })}
-                    onBlur={() => setFocused(null)}
                     onChange={(e) => patchSet(ex, i, "weight", e.target.value)}
                     className={inputCls}
                   />
@@ -451,11 +449,20 @@ export function SessionEditor({
                   >
                     <X size={16} />
                   </IconBtn>
-                  {/* Lot 24 : ajustement au pouce de la case en cours de
-                      saisie — taper « 67.5 » au clavier numérique avec les
-                      mains moites est le vrai frein en salle. N'apparaît que
-                      sous la case active, donc la densité gagnée au Lot 19
-                      reste intacte. */}
+                  {/* Lot 24 : ajustement au pouce de la case saisie — taper
+                      « 67.5 » au clavier numérique avec les mains moites est le
+                      vrai frein en salle. N'apparaît que sous la case
+                      concernée, donc la densité gagnée au Lot 19 reste intacte.
+
+                      La ligne NE SE REPLIE PAS au blur, et ce n'est pas un
+                      oubli : se replier ferait remonter de ~40 px tout ce qui
+                      est en dessous ENTRE le pointerdown et le pointerup, et le
+                      tap suivant (⏱, « + Série », assistance, note, ✕)
+                      atterrirait à côté. Constaté en pilotant l'app pour de
+                      vrai. Elle suit donc la dernière case saisie et ne bouge
+                      qu'au focus suivant — moment où le doigt est déjà sur sa
+                      cible, une case. Effet de bord utile : on peut corriger la
+                      dernière valeur sans rouvrir le clavier. */}
                   {focused?.key === ex.key && focused.index === i && (
                     <div className={`col-span-full ${stepRowCls}`}>
                       {(focused.field === "reps"

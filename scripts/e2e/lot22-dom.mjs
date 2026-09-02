@@ -62,9 +62,14 @@ try {
 
   await page.getByLabel("Reprendre __RESUME_TPL__").click();
   await page.waitForURL(/\/training\/muscu\?template=/, { timeout: 15000 });
+  // Le brouillon est relu APRÈS l'hydratation : on attend le signal de l'app
+  // (« Séance en cours restaurée ») plutôt qu'un délai arbitraire, sinon on lit
+  // encore le pré-remplissage serveur.
+  const restaure = page.getByText(/Séance en cours restaurée/);
+  await restaure.waitFor({ timeout: 15000 });
+  check("reprise : message « Séance en cours restaurée »", (await restaure.count()) === 1);
   check("reprise : reps saisies restaurées", (await page.getByLabel(`${EXO} série 1 reps`).inputValue()) === "9");
   check("reprise : poids saisi restauré", (await page.getByLabel(`${EXO} série 1 poids`).inputValue()) === "42.5");
-  check("reprise : message « Séance en cours restaurée »", (await page.getByText(/Séance en cours restaurée/).count()) === 1);
 
   // --- 3. « Abandonner » efface le brouillon ---
   await page.goto(`${BASE}/training`, { waitUntil: "networkidle" });

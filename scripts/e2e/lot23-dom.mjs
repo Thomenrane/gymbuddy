@@ -30,6 +30,9 @@ try {
   await page.getByLabel("Journal du jour").click();
   await page.waitForURL(/\/journal/, { timeout: 15000 });
   check("journal atteignable depuis l'accueil", page.url().includes("/journal"));
+  // waitForURL rend la main sur le squelette de chargement du groupe (tabs) :
+  // on attend le contenu réel du journal avant d'affirmer quoi que ce soit.
+  await page.getByRole("heading", { name: "Aujourd'hui" }).waitFor({ timeout: 15000 });
   check("journal : widget pesée intact", (await page.locator('[data-testid="weight-widget"]').count()) === 1);
   check("journal : ajout de repas intact", (await page.getByText("Ajouter").count()) > 0);
 

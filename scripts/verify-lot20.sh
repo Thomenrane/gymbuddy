@@ -50,7 +50,19 @@ grep -q "export async function getExercisePrefill" "$ACT" && ok "action getExerc
 grep -q "export async function getExerciseContext" "$SRV" && ok "lecture serveur : exercice + template actif + dernière perf" || ko "getExerciseContext absent"
 grep -q "workout_templates!inner" "$SRV" && ok "consignes prises sur un template ACTIF" || ko "template inactif possible"
 grep -q "localeCompare" "$SRV" && ok "choix déterministe quand plusieurs templates contiennent l'exo" || ko "choix non déterministe"
-if grep -qE "target_weight_(kg|note)[[:space:]]*:" "$ACT"; then
+# Une ÉCRITURE de cible prend deux formes, et deux seulement :
+#   - clé d'objet littéral NON précédée d'un point : « target_weight_kg: 80 »,
+#     « { target_weight_kg } », « { target_weight_kg, … } », « "target_weight_kg": »
+#   - affectation de propriété : « patch.target_weight_kg = 80 »
+# Une LECTURE (« exercise.target_weight_kg », y compris suivie d'une virgule)
+# n'est ni l'une ni l'autre. Effacer aveuglément tout ce qui suit un point —
+# ce que faisait la version précédente — laissait passer les affectations.
+target_write() {
+  grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" "$@" && return 0
+  grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" "$@" && return 0
+  return 1
+}
+if target_write "$ACT"; then
   ko "l'action écrit une cible (interdit — Claude only via MCP, garde-fou Lot 14)"
 else
   ok "aucune écriture de cible dans les actions app (garde-fou Lot 14 intact)"

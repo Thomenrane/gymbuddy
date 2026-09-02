@@ -74,7 +74,7 @@ export function RestTimer({
           type="button"
           aria-label="Arrêter le repos"
           onClick={onCancel}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted active:bg-surface"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted active:bg-surface"
         >
           <X size={16} />
         </button>

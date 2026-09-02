@@ -64,7 +64,10 @@ grep -q "if (!rpc.error)" "$SRV" && ok "repli si la migration n'est pas appliqu�
 
 echo "-- 4. Migration non cassante --"
 grep -q "create or replace function latest_sets_by_exercise" "$MIG" && ok "fonction créée" || ko "fonction absente"
-grep -q "security invoker" "$MIG" && ok "security invoker (RLS appliquée)" || ko "RLS contournable : refusé"
+# La clause SQL est en colonne 0 ; « security invoker » apparaît aussi dans
+# l'en-tête de commentaire et dans le `comment on function`. Sans l'ancrage,
+# passer la fonction en security definer laissait le contrat vert.
+grep -qE "^security invoker" "$MIG" && ok "security invoker (RLS appliquée)" || ko "RLS contournable : refusé"
 grep -qE "alter table|drop " "$MIG" && ko "la migration touche au schéma (elle doit seulement ajouter une fonction)" || ok "aucune table modifiée"
 grep -q "distinct on (ws.exercise_id)" "$MIG" && ok "tri « dernier workout » fait en SQL" || ko "tri encore côté app"
 

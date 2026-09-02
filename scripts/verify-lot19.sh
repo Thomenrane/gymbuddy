@@ -55,7 +55,10 @@ if node scripts/session-target.test.mjs; then
 else
   ko "tests du module d'objectif (scripts/session-target.test.mjs)"
 fi
-grep -qE "from \"(@/lib/)?supabase|next/|react" "$MOD" \
+# L'ancrage `from "` ne portait que sur la 1re alternative : un
+# `import … from "@supabase/supabase-js"` — la forme réellement utilisée dans le
+# dépôt — passait au travers.
+grep -qE 'from \"(@supabase/|@/lib/supabase|next/|react\"|react/)' "$MOD" \
   && ko "le module d'objectif importe la DB/React (il doit rester pur)" \
   || ok "module pur (aucun import DB/React)"
 grep -q "export function sessionTarget" "$MOD" && ok "sessionTarget exporté" || ko "sessionTarget absent"

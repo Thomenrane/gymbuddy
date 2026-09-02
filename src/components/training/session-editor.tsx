@@ -366,9 +366,9 @@ export function SessionEditor({
           type="button"
           aria-label="Aide : double progression, RPE, affichage"
           onClick={() => setHelpOpen(true)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-muted active:bg-surface-raised"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-muted active:bg-surface-raised"
         >
-          <Question size={16} />
+          <Question size={18} />
         </button>
       </div>
       {restored && (
@@ -520,7 +520,7 @@ export function SessionEditor({
                           // ferme cette ligne avant que le clic n'arrive.
                           onPointerDown={(e) => e.preventDefault()}
                           onClick={() => stepFocused(delta)}
-                          className="h-9 flex-1 rounded-md border border-border bg-surface-raised text-sm font-medium text-muted active:bg-surface"
+                          className="h-11 flex-1 rounded-md border border-border bg-surface-raised text-sm font-medium text-muted active:bg-surface"
                         >
                           {delta > 0 ? "+" : "−"}
                           {String(Math.abs(delta)).replace(".", ",")}

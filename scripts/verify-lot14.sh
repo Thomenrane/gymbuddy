@@ -59,16 +59,19 @@ BASE=$(crange "$REST/workouts?notes=eq.$NOTE_ENC&select=id")
 [ "$BASE" = "3" ] && ok "3 baselines intactes" || ko "baselines = $BASE (attendu 3)"
 
 echo "-- 3. Garde-fou : aucune écriture de cible côté app (MCP only) --"
-# Le garde-fou vise une ÉCRITURE, jamais une lecture. On EFFACE d'abord les
-# accès en lecture (« .target_weight_kg », précédés d'un point), puis on cherche
-# ce qui reste sous forme de clé de payload Supabase : « target_weight_kg: »,
-# le raccourci « { target_weight_kg } » ou « { target_weight_kg, … } », ou une
-# clé entre guillemets. Sans cet effacement, « targetWeight:
-# exercise.target_weight_kg, » — la lecture ajoutée au Lot 20 — déclenchait le
-# garde-fou et rendait ce contrat rouge.
-WRITE_RE="target_weight_(kg|note)([[:space:]]*[:,}]|\")"
-if sed 's/\.target_weight_\(kg\|note\)/./g' "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts" \
-     | grep -qE "$WRITE_RE"; then
+# Une ÉCRITURE de cible prend deux formes, et deux seulement :
+#   - clé d'objet littéral NON précédée d'un point : « target_weight_kg: 80 »,
+#     « { target_weight_kg } », « { target_weight_kg, … } », « "target_weight_kg": »
+#   - affectation de propriété : « patch.target_weight_kg = 80 »
+# Une LECTURE (« exercise.target_weight_kg », y compris suivie d'une virgule)
+# n'est ni l'une ni l'autre. Effacer aveuglément tout ce qui suit un point —
+# ce que faisait la version précédente — laissait passer les affectations.
+target_write() {
+  grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" "$@" && return 0
+  grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" "$@" && return 0
+  return 1
+}
+if target_write "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts"; then
   ko "une action app écrit une cible (interdit — Claude only via MCP)"
 else
   ok "aucune action app n'écrit de cible (posée uniquement par Claude via MCP)"

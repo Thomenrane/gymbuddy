@@ -51,7 +51,7 @@ if node scripts/session-controls.test.mjs; then
 else
   ko "tests du module (scripts/session-controls.test.mjs)"
 fi
-grep -qE "localStorage\.|from \"react\"" "$MOD" \
+grep -qE 'localStorage\.|from "(@supabase/|@/lib/supabase|next/|react"|react/)' "$MOD" \
   && ko "le module de saisie touche au stockage/React (il doit rester pur)" \
   || ok "module pur"
 

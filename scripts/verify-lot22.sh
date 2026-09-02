@@ -56,7 +56,7 @@ else
 fi
 # Accès RÉEL au stockage (« localStorage. ») : le mot seul apparaît dans les
 # commentaires du module, qui expliquent justement pourquoi il n'y touche pas.
-grep -qE "localStorage\.|from \"react\"" "$MOD" \
+grep -qE 'localStorage\.|from "(@supabase/|@/lib/supabase|next/|react"|react/)' "$MOD" \
   && ko "le module de brouillon touche au stockage/React (il doit rester pur)" \
   || ok "module pur (stockage isolé dans le store)"
 
@@ -66,9 +66,15 @@ grep -q "if (!dirty.current) return;" "$EDT" && ok "écriture conditionnée à u
 grep -q "dirty.current = true;" "$EDT" && ok "les mutations volontaires arment le brouillon" || ko "aucune mutation n'arme le brouillon"
 grep -q "touched: true" "$EDT" && ok "les séries saisies sont marquées (progression)" || ko "progression impossible à calculer"
 grep -q "forgetDraft();" "$EDT" && ok "brouillon effacé (enregistrement et réinitialisation)" || ko "brouillon jamais effacé"
-grep -q 'localStorage.setItem(\s*$\|localStorage.setItem(draftKey' "$EDT" \
-  && ko "l'éditeur écrit encore directement l'ancienne clé" \
-  || ok "écriture passée par l'index unique"
+# Assertion par DÉNOMBREMENT plutôt que par orthographe : le seul setItem admis
+# dans l'éditeur est la préférence de colonne RPE. Chercher « setItem(draftKey »
+# laissait passer « setItem(key, …) » ou un littéral « gb-session-… ».
+SETITEMS=$(grep -c "localStorage.setItem" "$EDT")
+if [ "$SETITEMS" = "1" ] && grep -q "localStorage.setItem(RPE_COL_KEY" "$EDT"; then
+  ok "brouillons écrits via l'index unique (seul setItem : la préférence RPE)"
+else
+  ko "setItem inattendu dans l'éditeur ($SETITEMS) : un brouillon pourrait échapper à l'index"
+fi
 grep -q "DRAFTS_KEY" "$STORE" && ok "index unique gb-drafts" || ko "index absent"
 grep -q "if (Object.keys(next).length !== Object.keys(current).length) write(next);" "$STORE" \
   && ok "purge sans écriture inutile (pas de boucle de rendu)" || ko "purge potentiellement bouclante"

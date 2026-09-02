@@ -140,6 +140,10 @@ export function SessionEditor({
   const rpeCol = useSyncExternalStore(rpeColStore.subscribe, rpeColStore.get, () => false);
   // Exercice en cours de chargement dans la sheet « Ajouter » (Lot 20).
   const [pendingId, setPendingId] = useState<string | null>(null);
+  // Jeton d'annulation : la sheet reste fermable pendant la lecture du contexte
+  // (scrim et ✕ ne sont pas désactivés). Sans lui, fermer puis se raviser
+  // ajoutait quand même l'exercice ~200 ms plus tard, tout en bas de la séance.
+  const pickToken = useRef(0);
   // Compteur d'ajouts : donne une clé React unique sans horloge (une clé
   // dérivée de Date.now() est impure et casserait un rendu concurrent).
   const [addSeq, setAddSeq] = useState(0);
@@ -200,7 +204,16 @@ export function SessionEditor({
       setRestored(true);
       // Un brouillon de l'ancien format est migré vers l'index : il devient
       // visible depuis « Reprendre », effaçable, et soumis à la purge 24 h.
-      if (migrated) dirty.current = true;
+      if (migrated) {
+        dirty.current = true;
+        // Sans cette suppression, « Abandonner » (qui ne vide que l'index)
+        // laissait l'ancienne clé ressusciter le brouillon au rechargement.
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* rien à nettoyer */
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -232,6 +245,7 @@ export function SessionEditor({
 
   function resetDraft() {
     forgetDraft();
+    setFocused(null);
     setExercises(initialExercises);
     // Sans ça, la durée pré-remplie à « Terminer » compte depuis le brouillon
     // jeté — potentiellement plusieurs heures avant la séance réelle.
@@ -292,7 +306,9 @@ export function SessionEditor({
       return;
     }
     setPendingId(item.id);
+    const token = ++pickToken.current;
     const prefill = await getExercisePrefill(item.id).catch(() => null);
+    if (token !== pickToken.current) return; // sheet fermée entre-temps
     mutate((prev) => [...prev, prefill ? { ...prefill, key: blank.key } : blank]);
     setPendingId(null);
     setAddOpen(false);
@@ -405,7 +421,10 @@ export function SessionEditor({
                 </IconBtn>
                 <IconBtn
                   label={`Retirer ${ex.name}`}
-                  onClick={() => mutate((prev) => prev.filter((e) => e.key !== ex.key))}
+                  onClick={() => {
+                    setFocused(null);
+                    mutate((prev) => prev.filter((e) => e.key !== ex.key));
+                  }}
                 >
                   <X size={16} />
                 </IconBtn>
@@ -460,11 +479,14 @@ export function SessionEditor({
                   )}
                   <IconBtn
                     label={`Supprimer la série ${i + 1}`}
-                    onClick={() =>
+                    onClick={() => {
+                      // Les index glissent : garder `focused` ferait porter les
+                      // boutons ± sur la série qui prend la place.
+                      setFocused(null);
                       patchExercise(ex.key, {
                         sets: ex.sets.filter((_, j) => j !== i),
-                      })
-                    }
+                      });
+                    }}
                   >
                     <X size={16} />
                   </IconBtn>
@@ -621,7 +643,11 @@ export function SessionEditor({
         <AddExerciseSheet
           catalog={catalog}
           pendingId={pendingId}
-          onClose={() => setAddOpen(false)}
+          onClose={() => {
+            pickToken.current += 1; // annule un ajout encore en vol
+            setPendingId(null);
+            setAddOpen(false);
+          }}
           onPick={pickExercise}
         />
       )}
@@ -638,7 +664,12 @@ export function SessionEditor({
               name: ex.name,
               note: ex.sessionNote?.trim() || null,
               sets: ex.sets.map((s) => {
-                const reps = s.reps.trim() === "" ? null : Math.round(Number(s.reps.replace(",", "."))) || null;
+                // Pas de « || null » ici : 0 rep est une valeur légitime, et le
+                // bouton « − » du Lot 24 clampe justement à 0. L'avaler
+                // enregistrait une série faite à 0 rep comme une case vide.
+                const repsRaw = s.reps.trim() === "" ? null : Number(s.reps.replace(",", "."));
+                const reps =
+                  repsRaw == null || Number.isNaN(repsRaw) ? null : Math.round(repsRaw);
                 const raw = s.weight.trim() === "" ? null : Number(s.weight.replace(",", "."));
                 const weight =
                   raw == null || Number.isNaN(raw)

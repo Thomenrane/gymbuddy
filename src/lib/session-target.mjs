@@ -39,18 +39,26 @@ function workingSet(sets) {
     .filter((s) => s.w != null);
   if (loaded.length === 0) {
     const reps = sets.map((s) => num(s.reps)).filter((n) => n != null);
-    return { load: null, reps: reps.length ? Math.max(...reps) : null };
+    return { load: null, reps: reps.length ? Math.max(...reps) : null, assist: false };
   }
-  const assist = loaded.some((s) => s.w < 0);
-  const load = assist
-    ? Math.min(...loaded.map((s) => Math.abs(s.w)))
-    : Math.max(...loaded.map((s) => Math.abs(s.w)));
+  // La difficulté est ordonnée par le poids SIGNÉ : -14 (assisté) < 0 (poids du
+  // corps) < +5 (lesté). Un simple max le capture, y compris à la transition
+  // assistance → lest. Déduire l'assistance d'un `some(w < 0)` sur toute la
+  // séance inverserait le signe le jour où la première série lestée arrive :
+  // [8@-10, 5@-10, 4@+5] serait lu « assisté », le min des valeurs absolues
+  // désignerait la série LESTÉE comme la moins assistée, et les 4 reps à +5 kg
+  // repartiraient en base à -5 kg.
+  const signed = Math.max(...loaded.map((s) => s.w));
   // Reps tenues À cette charge : le haut de fourchette se juge sur la série de
   // travail, pas sur un échauffement plus léger.
   const atLoad = loaded
-    .filter((s) => Math.abs(s.w) === load && s.reps != null)
+    .filter((s) => s.w === signed && s.reps != null)
     .map((s) => s.reps);
-  return { load, reps: atLoad.length ? Math.max(...atLoad) : null };
+  return {
+    load: Math.abs(signed),
+    reps: atLoad.length ? Math.max(...atLoad) : null,
+    assist: signed < 0,
+  };
 }
 
 /**
@@ -65,12 +73,7 @@ function workingSet(sets) {
 export function sessionTarget({ defaults, targetWeight, last } = {}) {
   const d = defaults ?? {};
   const done = last?.sets ?? [];
-  const assist = done.some((s) => {
-    const w = num(s.weight_kg);
-    return w != null && w < 0;
-  });
-
-  const { reps: doneReps, load: doneLoad } = workingSet(done);
+  const { reps: doneReps, load: doneLoad, assist } = workingSet(done);
   const target = num(targetWeight);
 
   // Le SIGNE (charge ajoutée ou assistance) n'est nulle part dans la cible :
@@ -92,16 +95,18 @@ export function sessionTarget({ defaults, targetWeight, last } = {}) {
     doneLoad != null &&
     (assist ? weight < doneLoad : weight > doneLoad);
 
-  let reps;
-  if (heavier) {
-    reps = min ?? doneReps;
-  } else {
-    reps = doneReps ?? min;
-    if (reps != null && max != null) reps = Math.min(reps, max);
-  }
+  // La charge monte → bas de fourchette ; sinon → au moins la dernière fois.
+  // Le plafond s'applique dans LES DEUX cas : sans `default_reps_min` (colonne
+  // nullable), la branche « ça monte » retombait sur les reps de la dernière
+  // fois SANS plafond, et proposait « 4×12 @ 70 kg » là où le template plafonne
+  // à 6 — l'extrapolation que ce module s'interdit, et pire au moment le plus
+  // dur.
+  let reps = heavier ? (min ?? doneReps) : (doneReps ?? min);
+  if (reps != null && max != null) reps = Math.min(reps, max);
 
   return {
-    sets: num(d.sets) ?? (done.length || 3),
+    // Un template à 0 série afficherait « 0×6 » alors que targetRows en rend 1.
+    sets: Math.max(1, num(d.sets) ?? (done.length || 3)),
     reps,
     weight,
     assist,

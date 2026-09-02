@@ -24,7 +24,16 @@ export function useWakeLock(active: boolean) {
     const acquire = async () => {
       if (released || document.visibilityState !== "visible") return;
       try {
-        sentinel = await navigator.wakeLock.request("screen");
+        const lock = await navigator.wakeLock.request("screen");
+        // Le démontage a pu arriver PENDANT la requête : le cleanup a alors vu
+        // `sentinel` encore null et n'a rien relâché. Sans ce second contrôle,
+        // le verrou est accordé après la mort de l'effet et plus personne ne
+        // peut le rendre — l'écran reste allumé sur toute l'app.
+        if (released) {
+          void lock.release().catch(() => {});
+          return;
+        }
+        sentinel = lock;
       } catch {
         /* refus (batterie faible, onglet caché) : sans conséquence */
       }

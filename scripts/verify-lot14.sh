@@ -59,13 +59,16 @@ BASE=$(crange "$REST/workouts?notes=eq.$NOTE_ENC&select=id")
 [ "$BASE" = "3" ] && ok "3 baselines intactes" || ko "baselines = $BASE (attendu 3)"
 
 echo "-- 3. Garde-fou : aucune écriture de cible côté app (MCP only) --"
-# Le garde-fou vise une ÉCRITURE. Une lecture s'écrit « exercise.target_weight_kg »
-# (précédée d'un point), une écriture prend la forme d'une clé de payload
-# Supabase : « target_weight_kg: », le raccourci « { target_weight_kg }" » ou
-# « { target_weight_kg, … } », ou une clé entre guillemets. Le motif couvre les
-# quatre ; depuis le Lot 20 une action LIT légitimement la cible pour
-# pré-remplir un exercice ajouté en séance — lire n'est pas poser.
-if grep -qE "target_weight_(kg|note)([[:space:]]*[:,}]|\")" "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts"; then
+# Le garde-fou vise une ÉCRITURE, jamais une lecture. On EFFACE d'abord les
+# accès en lecture (« .target_weight_kg », précédés d'un point), puis on cherche
+# ce qui reste sous forme de clé de payload Supabase : « target_weight_kg: »,
+# le raccourci « { target_weight_kg } » ou « { target_weight_kg, … } », ou une
+# clé entre guillemets. Sans cet effacement, « targetWeight:
+# exercise.target_weight_kg, » — la lecture ajoutée au Lot 20 — déclenchait le
+# garde-fou et rendait ce contrat rouge.
+WRITE_RE="target_weight_(kg|note)([[:space:]]*[:,}]|\")"
+if sed 's/\.target_weight_\(kg\|note\)/./g' "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts" \
+     | grep -qE "$WRITE_RE"; then
   ko "une action app écrit une cible (interdit — Claude only via MCP)"
 else
   ok "aucune action app n'écrit de cible (posée uniquement par Claude via MCP)"

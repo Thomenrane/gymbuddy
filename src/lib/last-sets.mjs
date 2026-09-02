@@ -92,7 +92,9 @@ export function summarizeSets(sets) {
 export function formatWeight(weightKg) {
   if (weightKg == null) return "PDC";
   const n = Number(weightKg);
-  if (n < 0) return `assist. ${Math.abs(n)} kg`;
+  // `-0 < 0` vaut false : sans Object.is, une série assistée à 0 se relit
+  // « 0 kg », c'est-à-dire charge nulle.
+  if (n < 0 || Object.is(n, -0)) return `assist. ${Math.abs(n)} kg`;
   return `${n} kg`;
 }
 

@@ -125,6 +125,40 @@ const signeConnuCharge = sessionTarget({
 });
 t("historique chargé → cible pré-remplie côté charge", signeConnuCharge.weight === 70 && signeConnuCharge.assist === false);
 
+// Transition assistance → lest : la difficulté est ordonnée par le poids SIGNÉ
+// (-10 assisté < 0 < +5 lesté). Un `some(w < 0)` sur toute la séance lisait
+// « assisté », désignait la série LESTÉE comme la moins assistée, et renvoyait
+// les 4 reps à +5 kg en base à -5 kg.
+const transition = sessionTarget({
+  defaults: { sets: 3, repsMin: 4, repsMax: 8 },
+  targetWeight: null,
+  last: { sets: [
+    { reps: 8, weight_kg: -10 },
+    { reps: 5, weight_kg: -10 },
+    { reps: 4, weight_kg: 5 },
+  ] },
+});
+t("assistance → lest : la série lestée fait foi", transition.assist === false && transition.weight === 5, JSON.stringify(transition));
+t("assistance → lest : libellé « 3×4 @ 5 kg »", formatTarget(transition) === "3×4 @ 5 kg", formatTarget(transition));
+
+// Le plafond de fourchette s'applique AUSSI quand la charge monte : sans
+// default_reps_min, la branche « ça monte » extrapolait à 12 reps.
+const sansMin = sessionTarget({
+  defaults: { sets: 4, repsMin: null, repsMax: 6 },
+  targetWeight: 70,
+  last: { sets: [{ reps: 12, weight_kg: 60 }] },
+});
+t("charge qui monte sans repsMin → capé au haut de fourchette", formatTarget(sansMin) === "4×6 @ 70 kg", formatTarget(sansMin));
+
+// Un template à 0 série annonçait « 0×6 » pendant que targetRows rendait 1 ligne.
+const zeroSeries = sessionTarget({
+  defaults: { sets: 0, repsMin: 4, repsMax: 6 },
+  targetWeight: 60,
+  last: { sets: [{ reps: 6, weight_kg: 60 }] },
+});
+t("template à 0 série → au moins 1, libellé et lignes d'accord",
+  zeroSeries.sets === 1 && targetRows(zeroSeries).length === 1, formatTarget(zeroSeries));
+
 // Aucune cible Claude : on retombe sur la dernière perf.
 const sansCible = {
   defaults: { sets: 3, repsMin: 8, repsMax: 12 },

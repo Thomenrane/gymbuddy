@@ -41,7 +41,7 @@ cleanup() {
   # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
   # build périmé (deux faux échecs dans cette session avant qu'on le voie).
   [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
-  fuser -k "$PORT/tcp" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
   curl -s -X DELETE "$REST/food_preferences?label=eq.__PREF_TEST__" "${SRV[@]}" -o /dev/null || true
 }
 trap cleanup EXIT

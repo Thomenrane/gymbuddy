@@ -61,7 +61,7 @@ cleanup() {
   [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
-  fuser -k "$PORT/tcp" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -107,7 +107,11 @@ grep -q "Number.isFinite(Number(weight)) && Number(weight) > 0" "$SVC" \
   && ko "l'ancienne contrainte « cible > 0 » est de retour (assistance inexprimable)" \
   || ok "la contrainte « > 0 » a disparu"
 grep -q "Number(weight) !== 0" "$SVC" && ok "cible non nulle exigée (0 n'a pas de sens)" || ko "une cible 0 passerait"
-grep -q "loaded.every((n) => n < 0)" "$SVC" \
+# Regex plutôt que chaîne exacte : l'annotation de type du paramètre a changé
+# une fois (`(n)` → `(n: number)`) et l'assertion, trop littérale, a viré au
+# rouge alors que le garde-fou était intact. On vise le SENS — « toutes les
+# charges connues sont négatives ».
+grep -qE 'loaded\.every\(\(n[^)]*\) => n < 0\)' "$SVC" \
   && ok "garde-fou : cible positive refusée sur un exercice assisté" || ko "garde-fou de signe absent"
 grep -q "NÉGATIF = assistance" "$ROUTE" \
   && ok "l'outil MCP annonce la convention à Claude" || ko "Claude ne sait pas que le signe compte"

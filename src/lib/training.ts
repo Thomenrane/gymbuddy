@@ -24,8 +24,13 @@ export type Exercise = {
   measure_type: "reps" | "duration" | "distance";
   note: string | null;
   // Lot 14 : prochain poids à viser, posé par Claude via MCP. Null = pas de cible.
+  // Lot 26 : SIGNÉ — positif = charge ajoutée, négatif = assistance.
   target_weight_kg: number | null;
   target_weight_note: string | null;
+  // Lot 29 : incrément de progression propre à l'exercice (null = 2,5 kg), et
+  // dernière proposition refusée (pour ne pas la reproposer en boucle).
+  progression_step_kg: number | null;
+  progression_declined_kg: number | null;
 };
 
 export type WorkoutSet = {

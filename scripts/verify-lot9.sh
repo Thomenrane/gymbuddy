@@ -37,7 +37,7 @@ cleanup() {
   # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
   # build périmé (deux faux échecs dans cette session avant qu'on le voie).
   [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
-  fuser -k "$PORT/tcp" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
   curl -s -X DELETE "$REST/meal_plan_entries?plan_date=gte.1999-09-06&plan_date=lte.1999-09-08" "${SRV[@]}" -o /dev/null || true
   curl -s -X DELETE "$REST/meal_logs?log_date=gte.1999-09-06&log_date=lte.1999-09-08" "${SRV[@]}" -o /dev/null || true
   curl -s -X DELETE "$REST/recipes?name=like.__LOT9*" "${SRV[@]}" -o /dev/null || true

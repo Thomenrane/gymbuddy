@@ -10,6 +10,7 @@ import {
   targetRows,
 } from "@/lib/session-target.mjs";
 import { getExerciseContext } from "@/lib/training-server";
+import { setExerciseTargetWith } from "@/lib/mcp/service";
 import { RUN_TYPES, type RunType, type WorkoutType } from "@/lib/training";
 
 export type SaveResult = { error: string } | { ok: true; id: string };
@@ -407,5 +408,64 @@ export async function deleteWorkoutDraft(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("workout_drafts").delete().eq("id", id);
   if (error) return { error: error.message };
+  return { ok: true };
+}
+
+// ---------- Lot 29 : proposition de progression (✓ / ✗) ----------
+//
+// Le Lot 14 posait que l'app n'écrit JAMAIS de cible — elles venaient toutes de
+// Claude via MCP. Le PO a tranché de l'assouplir pour ce cas précis, et
+// seulement par ce chemin : le ✓ passe par `setExerciseTargetWith`, la MÊME
+// fonction que l'outil MCP (mêmes validations, même garde-fou de signe). Ce
+// n'est donc pas un second écrivain, c'est le même, appelé depuis l'app.
+//
+// Avec le client de SESSION, pas celui du MCP : `mcpDb()` porte la clé
+// service_role et contourne la RLS — un bouton d'interface ne doit pas écrire
+// en privilège élevé. Le garde-fou de verify-lot14.sh vérifie exactement ça.
+
+export async function acceptTargetSuggestion(input: {
+  exercise_name: string;
+  to: number;
+  note?: string | null;
+}): Promise<ActionResult> {
+  if (!Number.isFinite(input.to) || input.to === 0)
+    return { error: "Proposition invalide." };
+  const supabase = await createClient();
+  try {
+    await setExerciseTargetWith(supabase, {
+      exercise_name: input.exercise_name,
+      target_weight_kg: input.to,
+      target_weight_note:
+        input.note?.trim() ||
+        `Progression acceptée : objectif atteint 2 séances d'affilée.`,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Cible non posée." };
+  }
+  // Une cible acceptée périme le refus précédent : la prochaine proposition
+  // portera sur une autre valeur, elle doit pouvoir s'afficher.
+  await supabase
+    .from("exercises")
+    .update({ progression_declined_kg: null })
+    .ilike("name", input.exercise_name.trim());
+  revalidatePath("/training");
+  return { ok: true };
+}
+
+export async function declineTargetSuggestion(input: {
+  exercise_id: string;
+  to: number;
+}): Promise<ActionResult> {
+  if (!Number.isFinite(input.to)) return { error: "Proposition invalide." };
+  const supabase = await createClient();
+  // On mémorise la VALEUR refusée, pas un simple « refusé » : dès que la cible
+  // bouge, la proposition suivante porte sur un autre chiffre et redevient
+  // légitime. Un booléen aurait tu la progression pour toujours.
+  const { error } = await supabase
+    .from("exercises")
+    .update({ progression_declined_kg: input.to })
+    .eq("id", input.exercise_id);
+  if (error) return { error: error.message };
+  revalidatePath("/training");
   return { ok: true };
 }

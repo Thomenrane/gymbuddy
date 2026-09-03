@@ -46,7 +46,7 @@ cleanup() {
   [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
-  fuser -k "$PORT/tcp" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 

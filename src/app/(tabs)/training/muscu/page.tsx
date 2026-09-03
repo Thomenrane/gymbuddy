@@ -10,9 +10,11 @@ import { getWorkoutDraft } from "@/lib/workout-drafts-server";
 import {
   getExerciseCatalog,
   getLastSets,
+  getRecentSessions,
   getTemplate,
   getWorkout,
 } from "@/lib/training-server";
+import { suggestNextTarget } from "@/lib/progression.mjs";
 import {
   SessionEditor,
   type EditorExercise,
@@ -135,7 +137,10 @@ export default async function MuscuSessionPage({
     if (!template) notFound();
     title = template.name;
     const exercises = template.template_exercises ?? [];
-    const lastSets = await getLastSets(exercises.map((t) => t.exercise_id));
+    const ids = exercises.map((t) => t.exercise_id);
+    // Lot 29 : deux dernières SÉANCES par exercice — « objectif atteint 2×
+    // d'affilée » ne se juge pas sur la dernière séance seule.
+    const [lastSets, recent] = await Promise.all([getLastSets(ids), getRecentSessions(ids, 2)]);
     initialExercises = exercises.map((tex) => {
       const last = lastSets.get(tex.exercise_id);
       // Lot 19 : les cases portent l'OBJECTIF du jour (template + cible Claude
@@ -148,6 +153,15 @@ export default async function MuscuSessionPage({
         },
         targetWeight: tex.exercise.target_weight_kg,
         last: last ?? null,
+      });
+      // La proposition est calculée à la LECTURE : une proposition stockée
+      // deviendrait fausse dès la séance suivante enregistrée ou corrigée.
+      const suggestion = suggestNextTarget({
+        sessions: recent.get(tex.exercise_id) ?? [],
+        defaults: { repsMax: tex.default_reps_max, targetRpe: tex.target_rpe },
+        signedTarget: tex.exercise.target_weight_kg,
+        step: tex.exercise.progression_step_kg,
+        declined: tex.exercise.progression_declined_kg,
       });
       return {
         key: `tpl-${tex.position}`,
@@ -165,6 +179,7 @@ export default async function MuscuSessionPage({
         targetWeight: tex.exercise.target_weight_kg,
         targetNote: tex.exercise.target_weight_note,
         targetLabel: formatTarget(target),
+        suggestion,
         assist: target.assist,
         sets: targetRows(target),
       };

@@ -47,7 +47,7 @@ cleanup() {
   [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
-  fuser -k "$PORT/tcp" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -73,15 +73,58 @@ echo "-- 3. Garde-fou : aucune écriture de cible côté app (MCP only) --"
 # Une LECTURE (« exercise.target_weight_kg », y compris suivie d'une virgule)
 # n'est ni l'une ni l'autre. Effacer aveuglément tout ce qui suit un point —
 # ce que faisait la version précédente — laissait passer les affectations.
+# Lot 29 : l'app a désormais LE DROIT de nommer target_weight_kg — mais
+# seulement pour le passer à `setExerciseTargetWith`, la fonction partagée avec
+# l'outil MCP. Ce qui reste interdit, c'est d'écrire la colonne SOI-MÊME, avec
+# ses propres règles. On retire donc du fichier les arguments passés à cette
+# fonction avant d'appliquer la détection : sans ça, le chemin autorisé se
+# faisait refuser par le garde-fou censé le protéger.
+strip_shared_call() {
+  awk '
+    /setExerciseTargetWith\(/ { skip = 1 }
+    skip && /^[[:space:]]*\}\);?[[:space:]]*$/ { skip = 0; next }
+    !skip { print }
+  ' "$1"
+}
 target_write() {
-  grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" "$@" && return 0
-  grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" "$@" && return 0
+  for f in "$@"; do
+    strip_shared_call "$f" \
+      | grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" && return 0
+    strip_shared_call "$f" \
+      | grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" && return 0
+  done
   return 1
 }
 if target_write "src/app/(tabs)/training/training-actions.ts" "src/app/(tabs)/today-actions.ts"; then
-  ko "une action app écrit une cible (interdit — Claude only via MCP)"
+  ko "une action app écrit une cible EN DIRECT (interdit : il n'y a qu'un chemin)"
 else
-  ok "aucune action app n'écrit de cible (posée uniquement par Claude via MCP)"
+  ok "aucune action app n'écrit de cible en direct"
+fi
+
+# AMENDEMENT (Lot 29, décision PO). La règle « aucune cible posée par l'app »
+# est levée pour UN cas : le ✓ d'une proposition de progression. Elle n'est pas
+# supprimée, elle est resserrée — l'app ne peut poser une cible que par
+# `setExerciseTargetWith`, la fonction que l'outil MCP appelle lui aussi (mêmes
+# validations, même garde-fou de signe du Lot 26). Un second écrivain avec ses
+# propres règles est ce qu'on refuse, pas l'écriture elle-même.
+ACT="src/app/(tabs)/training/training-actions.ts"
+if grep -q "setExerciseTargetWith" "$ACT"; then
+  ok "le ✓ passe par la fonction partagée avec le MCP (un seul écrivain)"
+  # ... et avec le client de SESSION. `mcpDb()` porte la clé service_role et
+  # contourne la RLS : un bouton d'interface ne doit pas écrire en privilège
+  # élevé, sinon toutes les autres écritures de l'app perdent leur filet.
+  # Chercher « mcpDb » matcherait le commentaire qui explique pourquoi on ne
+  # l'utilise pas (troisième garde-fou de cette série à tomber dans ce piège).
+  # On vise l'IMPORT : pour appeler mcpDb() il faut l'importer, et aucun
+  # commentaire n'écrit une ligne d'import.
+  grep -qE '^import .*from "@/lib/mcp/db"' "$ACT" \
+    && ko "une action app importe mcpDb (service_role) : RLS contournée depuis l'UI" \
+    || ok "l'app écrit avec le client de session (RLS appliquée)"
+  grep -q "setExerciseTargetWith(supabase," "$ACT" \
+    && ok "client de session passé explicitement à la fonction partagée" \
+    || ko "client non explicite : impossible de savoir sous quels droits ça écrit"
+else
+  ok "aucune cible posée par l'app (règle d'origine du Lot 14)"
 fi
 
 echo "-- 4. Serveur ($RUN_BASE) --"

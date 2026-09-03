@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { mcpDb } from "./db";
 import { brusselsDay, isIsoDate, shiftDay } from "@/lib/brussels-day.mjs";
 import { roundMacro } from "@/lib/today";
@@ -1336,14 +1337,26 @@ export async function listExercises(query?: string) {
  * d'exercice. La cible est posée EXCLUSIVEMENT par Claude (double progression) ;
  * aucun calcul dans l'app.
  */
-export async function setExerciseTarget(input: {
-  exercise_name: string;
-  target_weight_kg: number | null;
-  target_weight_note?: string | null;
-}) {
+/**
+ * Lot 29 : l'app aussi pose des cibles (le ✓ d'une proposition de progression),
+ * mais elle ne doit PAS le faire avec la clé service_role du MCP — `mcpDb()`
+ * contourne la RLS, et un bouton d'interface qui écrit en privilège élevé fait
+ * sauter le filet d'autorisation de toutes les autres écritures de l'app.
+ *
+ * On partage donc la LOGIQUE, pas le client : mêmes validations, même garde-fou
+ * de signe, deux appelants qui fournissent chacun le sien — `mcpDb()` pour le
+ * MCP, le client de session (RLS appliquée) pour l'app.
+ */
+export async function setExerciseTargetWith(
+  db: SupabaseClient,
+  input: {
+    exercise_name: string;
+    target_weight_kg: number | null;
+    target_weight_note?: string | null;
+  }
+) {
   const name = input.exercise_name?.trim();
   if (!name) fail("exercise_name est obligatoire.");
-  const db = mcpDb();
   const { data: exercise, error } = await db
     .from("exercises")
     .select("id, name")
@@ -1379,10 +1392,10 @@ export async function setExerciseTarget(input: {
       .order("workout_date", { referencedTable: "workouts", ascending: false })
       .limit(20);
     if (rErr) fail(rErr.message);
-    const loaded = (recent ?? [])
-      .map((r) => Number((r as { weight_kg: number | null }).weight_kg))
-      .filter((n) => Number.isFinite(n) && n !== 0);
-    if (loaded.length > 0 && loaded.every((n) => n < 0))
+    const loaded = ((recent ?? []) as { weight_kg: number | null }[])
+      .map((r) => Number(r.weight_kg))
+      .filter((n: number) => Number.isFinite(n) && n !== 0);
+    if (loaded.length > 0 && loaded.every((n: number) => n < 0))
       fail(
         `"${exercise.name}" est un exercice ASSISTÉ (dernières séries en poids ` +
           `négatif). Une cible de ${weight} serait lue comme ${weight} kg lestés. ` +
@@ -1402,6 +1415,15 @@ export async function setExerciseTarget(input: {
     .single();
   if (upErr) fail(upErr.message);
   return data;
+}
+
+/** Entrée MCP : même logique, client service_role. */
+export async function setExerciseTarget(input: {
+  exercise_name: string;
+  target_weight_kg: number | null;
+  target_weight_note?: string | null;
+}) {
+  return setExerciseTargetWith(mcpDb(), input);
 }
 
 export async function createExercise(input: {

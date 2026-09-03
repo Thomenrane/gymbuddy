@@ -14,6 +14,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Check,
   CircleNotch,
   Info,
   NotePencil,
@@ -28,10 +29,13 @@ import {
   saveWorkout,
   saveWorkoutDraft,
   deleteWorkoutDraft,
+  acceptTargetSuggestion,
+  declineTargetSuggestion,
   type DraftExercise,
 } from "@/app/(tabs)/training/training-actions";
 import { PROGRESSION_HINT } from "@/lib/training";
 import { stepValue } from "@/lib/session-controls.mjs";
+import { formatSuggestion } from "@/lib/progression.mjs";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import { RestTimer } from "./rest-timer";
 
@@ -52,6 +56,10 @@ export type EditorExercise = {
   // avec, donc il ne s'affiche PAS dans le flux : il vit derrière le ⓘ, pour
   // qu'on puisse le retrouver après avoir tapé dans les cases.
   targetLabel?: string | null;
+  // Lot 29 : proposition de progression, calculée à la LECTURE (deux dernières
+  // séances réussies). Poids signés — sur un exercice assisté, `to` est plus
+  // GRAND que `from` (-14 → -12 : moins d'aide).
+  suggestion?: { from: number; to: number; step: number } | null;
   assist: boolean; // poids saisis en assistance (stockés négatifs)
   // Lot 18 : note libre pour CET exercice ce jour-là ("assistance -14 pour
   // tenir propre") — facultative, jamais bloquante. Distincte de `note`
@@ -141,6 +149,9 @@ export function SessionEditor({
   // Lot 19 : détail d'un exercice (objectif, fourchette, notes) déplié à la
   // demande — le flux ne garde qu'UNE ligne de contexte, « Dernière ».
   const [infoOpen, setInfoOpen] = useState<Record<string, boolean>>({});
+  // Lot 29 : propositions déjà tranchées dans CETTE session d'écran. Le serveur
+  // a la vérité, mais l'attendre laisserait la pastille affichée après le tap.
+  const [decided, setDecided] = useState<Record<string, boolean>>({});
   // Colonne RPE masquée par défaut : un tiers de la largeur pour un champ
   // rarement rempli. Préférence globale, mémorisée localement.
   const rpeCol = useSyncExternalStore(rpeColStore.subscribe, rpeColStore.get, () => false);
@@ -237,6 +248,25 @@ export function SessionEditor({
       clearTimeout(id);
     };
   }, [exercises, date, templateId, title, editId]);
+
+  /** Proposition encore à trancher pour cet exercice. */
+  function pendingSuggestion(ex: EditorExercise) {
+    return decided[ex.key] ? null : (ex.suggestion ?? null);
+  }
+
+  async function decideSuggestion(ex: EditorExercise, accept: boolean) {
+    const s = ex.suggestion;
+    if (!s) return;
+    // Optimiste : la pastille disparaît au tap. En cas d'échec serveur on la
+    // remet, plutôt que de laisser croire que la cible a bougé.
+    setDecided((prev) => ({ ...prev, [ex.key]: true }));
+    const res = accept
+      ? await acceptTargetSuggestion({ exercise_name: ex.name, to: s.to })
+      : ex.exerciseId
+        ? await declineTargetSuggestion({ exercise_id: ex.exerciseId, to: s.to })
+        : { ok: true as const };
+    if ("error" in res) setDecided((prev) => ({ ...prev, [ex.key]: false }));
+  }
 
   /** « Réinitialiser » : on jette le brouillon et on repart du pré-rempli.
    *  (À l'ENREGISTREMENT, c'est saveWorkout qui l'efface, dans le même
@@ -387,7 +417,12 @@ export function SessionEditor({
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-1.5">
                   <h2 className="truncate font-semibold leading-tight">{ex.name}</h2>
-                  {hasDetail(ex) && (
+                  {pendingSuggestion(ex) && (
+                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-primary">
+                      Nouveau
+                    </span>
+                  )}
+                  {(hasDetail(ex) || pendingSuggestion(ex)) && (
                     <button
                       type="button"
                       aria-label={`${ex.name} : objectif et consignes`}
@@ -431,7 +466,13 @@ export function SessionEditor({
               </div>
             </div>
 
-            {infoOpen[ex.key] && <ExerciseDetail ex={ex} />}
+            {infoOpen[ex.key] && (
+                <ExerciseDetail
+                  ex={ex}
+                  suggestion={pendingSuggestion(ex)}
+                  onDecide={(accept) => void decideSuggestion(ex, accept)}
+                />
+              )}
 
             <div className="mt-2 space-y-1.5">
               <div className={`${gridCls} text-xs text-faint`}>
@@ -733,7 +774,15 @@ function hasDetail(ex: EditorExercise): boolean {
  * consignes du template et les notes longues — celles de Claude comme celles
  * du catalogue.
  */
-function ExerciseDetail({ ex }: { ex: EditorExercise }) {
+function ExerciseDetail({
+  ex,
+  suggestion,
+  onDecide,
+}: {
+  ex: EditorExercise;
+  suggestion?: { from: number; to: number; step: number } | null;
+  onDecide?: (accept: boolean) => void;
+}) {
   const consignes = [
     ex.repRange && `${ex.repRange} reps`,
     ex.rpe && `RPE ${ex.rpe}`,
@@ -758,6 +807,35 @@ function ExerciseDetail({ ex }: { ex: EditorExercise }) {
         </p>
       )}
       {consignes && <p className="text-muted">Cible : {consignes}</p>}
+      {/* Lot 29 : la proposition de progression se tranche ICI, à côté de
+          l'objectif qu'elle remplacerait — pas dans un écran à part. Rien n'est
+          écrit tant que le ✓ n'a pas été touché. */}
+      {suggestion && (
+        <div className="flex items-center gap-2 rounded-md border border-accent bg-surface px-2 py-1.5">
+          <p className="min-w-0 flex-1 font-medium text-accent">
+            Proposition : {formatSuggestion(suggestion)}
+            <span className="block font-normal text-muted">
+              objectif atteint 2 séances d&apos;affilée
+            </span>
+          </p>
+          <button
+            type="button"
+            aria-label={`Accepter la progression pour ${ex.name}`}
+            onClick={() => onDecide?.(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-primary text-on-primary"
+          >
+            <Check size={18} weight="bold" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Refuser la progression pour ${ex.name}`}
+            onClick={() => onDecide?.(false)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-muted active:bg-surface-raised"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {ex.targetNote && <p className="text-muted">{ex.targetNote}</p>}
       {ex.note && <p className="text-faint">{ex.note}</p>}
     </div>

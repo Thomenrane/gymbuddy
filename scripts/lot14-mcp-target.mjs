@@ -67,13 +67,22 @@ try {
   check("exercice sans cible → target_weight_kg=null, pas d'erreur",
     r.data.exercise.target_weight_kg === null && !r.isError);
 } finally {
-  // Restauration de la cible d'origine (souvent null).
+  // Restauration VÉRIFIÉE de la cible d'origine. Ce test écrit sur un VRAI
+  // exercice du catalogue : un `.catch(() => {})` silencieux laisse la cible du
+  // PO à 67,5 sans que personne ne le sache. C'est arrivé — une passe de
+  // contrats tuée par un timeout a laissé Back Squat à 67,5 au lieu de 72,5,
+  // note effacée. Le silence était le vrai défaut, pas l'interruption.
   if (exName) {
     await call("set_exercise_target", {
       exercise_name: exName,
       target_weight_kg: orig?.w ?? null,
       ...(orig?.n ? { target_weight_note: orig.n } : {}),
     }).catch(() => {});
+    const back = await call("get_exercise_history", { exercise_name: exName, limit: 1 })
+      .catch(() => ({ data: {} }));
+    const now = back.data.exercise?.target_weight_kg ?? null;
+    const same = now == null ? (orig?.w ?? null) == null : Number(now) === Number(orig?.w);
+    check(`cible d'origine restaurée sur ${exName} (${orig?.w ?? "null"})`, same, `en base : ${now}`);
   }
   await client.close();
 }

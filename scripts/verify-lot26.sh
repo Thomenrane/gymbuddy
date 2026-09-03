@@ -53,8 +53,15 @@ RUN_BASE="${BASE_URL:-http://localhost:$PORT}"
 MCP_URL="${MCP_URL:-$RUN_BASE/api/mcp}"
 
 cleanup() {
+  # `npx next start` n'est qu'un LANCEUR : tuer $SERVER_PID laisse vivre le
+  # process `next-server` enfant, qui garde le port. Le contrat suivant croit
+  # démarrer son serveur, échoue silencieusement à se lier, et teste en réalité
+  # le build périmé du serveur resté là — deux faux échecs (Lots 18 et 19) avant
+  # qu'on remonte jusqu'ici. On tue donc les enfants ET ce qui tient le port.
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  fuser -k "$PORT/tcp" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -90,11 +97,6 @@ grep -q "signed > doneSigned" "$MOD" \
   && ok "difficulté ordonnée par le poids signé (-14 < -12 < 0 < +5)" || ko "comparaison non signée : l'assistance s'inverse"
 
 echo "-- 3. Service : négatif autorisé, positif sur exo assisté refusé --"
-# Viser « Number(weight) > 0 » matcherait le NOUVEAU garde-fou de signe, qui
-# teste légitimement la positivité avant de refuser. On cible donc l'ancienne
-# contrainte par ce qu'elle avait d'unique : sa condition complète et son
-# message. Une assertion qui matche le code qu'elle est censée interdire est
-# une assertion morte.
 # Viser « Number(weight) > 0 » seul matcherait le NOUVEAU garde-fou de signe,
 # qui teste légitimement la positivité avant de refuser ; viser le message
 # « doit être un nombre > 0 » matcherait le validateur de macros (service.ts:99),

@@ -3,7 +3,8 @@ import { CaretLeft, CaretRight, Plus, Notebook } from "@phosphor-icons/react/dis
 import { brusselsDay, isIsoDate } from "@/lib/brussels-day.mjs";
 import { getDayWorkouts, getMonthWorkouts } from "@/lib/training-server";
 import { WorkoutCard } from "@/components/training/workout-card";
-import { ResumeCard } from "@/components/training/resume-card";
+import { DraftCard } from "@/components/training/draft-card";
+import { getWorkoutDrafts } from "@/lib/workout-drafts-server";
 import type { WorkoutType } from "@/lib/training";
 
 export const dynamic = "force-dynamic";
@@ -47,10 +48,17 @@ export default async function TrainingPage({
   const prev = month === 1 ? `${year - 1}-12` : `${year}-${pad(month - 1)}`;
   const next = month === 12 ? `${year + 1}-01` : `${year}-${pad(month + 1)}`;
 
-  const [workouts, dayWorkouts] = await Promise.all([
+  const [workouts, dayWorkouts, drafts] = await Promise.all([
     getMonthWorkouts(first, last),
     getDayWorkouts(selectedDate),
+    getWorkoutDrafts(),
   ]);
+  // Lot 27 : une séance en cours du jour sélectionné se range DANS la liste du
+  // jour, au même endroit qu'une séance terminée (demande PO). Celles des
+  // autres jours restent visibles au-dessus : une séance commencée hier soir
+  // doit se reprendre ce matin sans naviguer dans le calendrier.
+  const sameDayDrafts = drafts.filter((d) => d.workout_date === selectedDate);
+  const otherDrafts = drafts.filter((d) => d.workout_date !== selectedDate);
   const typesByDay = new Map<string, Set<WorkoutType>>();
   for (const w of workouts) {
     const set = typesByDay.get(w.workout_date) ?? new Set<WorkoutType>();
@@ -147,22 +155,29 @@ export default async function TrainingPage({
         </span>
       </p>
 
-      {/* Lot 22 : une séance commencée puis quittée reste visible ici, où qu'on
-          en soit dans le calendrier — c'est le seul endroit où elle existe
-          encore (elle n'est pas en base tant qu'elle n'est pas terminée). */}
-      <ResumeCard today={today} />
-
       {/* Aperçu inline de la séance du jour sélectionné. Lot 28 : le lien
           « Ouvrir le jour » a sauté — la vue jour ne montrait rien de plus que
           cet aperçu, et chaque carte mène déjà au détail de sa séance. La route
           /training/day reste vivante : c'est là qu'on retombe après avoir
           enregistré, modifié ou supprimé une séance (5 appelants). */}
+      {otherDrafts.length > 0 && (
+        <section className="space-y-2">
+          {otherDrafts.map((d) => (
+            <DraftCard key={d.id} draft={d} today={today} />
+          ))}
+        </section>
+      )}
+
       <section className="space-y-2">
         <h2 className="text-sm font-medium capitalize text-muted">
           {dayLabel(selectedDate)}
         </h2>
 
-        {dayWorkouts.length === 0 ? (
+        {sameDayDrafts.map((d) => (
+          <DraftCard key={d.id} draft={d} today={today} />
+        ))}
+
+        {dayWorkouts.length === 0 && sameDayDrafts.length === 0 ? (
           <Link
             href={`/training/new?date=${selectedDate}`}
             className="flex h-16 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-sm text-muted active:bg-surface"

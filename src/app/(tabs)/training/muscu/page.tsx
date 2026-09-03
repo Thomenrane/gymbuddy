@@ -6,6 +6,7 @@ import {
   sessionTarget,
   targetRows,
 } from "@/lib/session-target.mjs";
+import { getWorkoutDraft } from "@/lib/workout-drafts-server";
 import {
   getExerciseCatalog,
   getLastSets,
@@ -35,9 +36,19 @@ const setsToDraft = (
 export default async function MuscuSessionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ template?: string; date?: string; edit?: string }>;
+  searchParams: Promise<{
+    template?: string;
+    date?: string;
+    edit?: string;
+    draft?: string;
+  }>;
 }) {
-  const { template: templateId, date: rawDate, edit: editId } = await searchParams;
+  const {
+    template: templateId,
+    date: rawDate,
+    edit: editId,
+    draft: draftId,
+  } = await searchParams;
   const date = rawDate && isIsoDate(rawDate) ? rawDate : brusselsDay();
   const fullCatalog = await getExerciseCatalog();
   const catalog = fullCatalog.map((e) => ({
@@ -57,8 +68,31 @@ export default async function MuscuSessionPage({
   let initialExercises: EditorExercise[] = [];
   let meta: { duration: string; intensity: number | null; notes: string } | undefined;
   let workoutDate = date;
+  let draftStartedAt: number | null = null;
+  let resumedDraftId: string | null = null;
+  let resumedTemplateId: string | null = null;
 
-  if (editId) {
+  if (draftId) {
+    // Lot 27 : reprise d'une séance en cours. Le brouillon porte l'état exact
+    // de l'éditeur — on ne re-calcule PAS l'objectif par-dessus, sinon la
+    // reprise écraserait ce qui a été saisi.
+    const draft = await getWorkoutDraft(draftId);
+    if (!draft) notFound();
+    const payload = draft.payload as {
+      exercises?: EditorExercise[];
+      startedAt?: number;
+    } | null;
+    const saved = payload?.exercises;
+    if (!Array.isArray(saved) || saved.length === 0) notFound();
+    title = draft.title;
+    workoutDate = draft.workout_date;
+    initialExercises = saved;
+    draftStartedAt = typeof payload?.startedAt === "number" ? payload.startedAt : null;
+    resumedDraftId = draft.id;
+    // Sans ça, la première ré-écriture du brouillon repris perdrait le lien au
+    // template (l'URL de reprise ne porte que ?draft=).
+    resumedTemplateId = draft.template_id;
+  } else if (editId) {
     const workout = await getWorkout(editId);
     if (!workout || workout.type !== "muscu") notFound();
     title = "Modifier la séance";
@@ -141,8 +175,10 @@ export default async function MuscuSessionPage({
     <SessionEditor
       title={title}
       date={workoutDate}
-      templateId={templateId ?? null}
+      templateId={resumedTemplateId ?? templateId ?? null}
       editId={editId ?? null}
+      draftId={resumedDraftId}
+      draftStartedAt={draftStartedAt}
       initialExercises={initialExercises}
       catalog={catalog}
       initialMeta={meta}

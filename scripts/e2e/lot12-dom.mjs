@@ -3,7 +3,7 @@
 // On rend une séance depuis un template, on vérifie les champs RPE (vides par
 // défaut), puis on enregistre la séance AVEC les RPE laissés vides et on
 // confirme en base que les sets sont stockés avec rpe = null. Nettoyage.
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const DTEST = "1999-12-14";
 
@@ -12,6 +12,9 @@ async function cleanup() {
 }
 
 let browser;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
   // Un template actif avec au moins un exercice → sets pré-remplis à rendre.
@@ -71,5 +74,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("séance RPE (DOM)") ? process.exitCode ?? 0 : 1);

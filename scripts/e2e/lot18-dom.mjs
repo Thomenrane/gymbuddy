@@ -4,7 +4,7 @@
 // quand même (note facultative, jamais bloquante). Après enregistrement, la
 // fiche séance affiche la note sous le bon exercice, la DB ne contient qu'UNE
 // ligne workout_exercise_notes, et la note de séance globale reste distincte.
-import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const D = "1999-12-19";
 const EXO_A = "__NOTE_DOM_A__";
@@ -17,6 +17,9 @@ async function cleanup() {
 }
 
 let browser, page;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
   const { browser: b, page: p } = await authedBrowser();
@@ -82,5 +85,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("Note par exercice (DOM)") ? (process.exitCode ?? 0) : 1);

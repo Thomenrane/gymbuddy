@@ -42,6 +42,11 @@ crange() { curl -s "$1" "${SRV[@]}" -H "Prefer: count=exact" -I 2>/dev/null | tr
 cleanup() {
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  # `npx next start` n'est qu'un lanceur : tuer $SERVER_PID laisse vivre le
+  # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
+  # build périmé (deux faux échecs dans cette session avant qu'on le voie).
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
+  fuser -k "$PORT/tcp" 2>/dev/null || true
   curl -s -X DELETE "$REST/workouts?workout_date=eq.1999-12-13" "${SRV[@]}" -o /dev/null || true
   curl -s -X DELETE "$REST/workouts?workout_date=eq.1999-12-14" "${SRV[@]}" -o /dev/null || true
   curl -s -X DELETE "$REST/exercises?name=eq.__RPE_TEST_EXO__" "${SRV[@]}" -o /dev/null || true

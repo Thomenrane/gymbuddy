@@ -9,7 +9,7 @@
 //     dernier poids fait : le PO veut viser, pas recopier
 // Ce que le Lot 14 garantissait reste garanti : la cible existe, elle est
 // affichée, elle reste distincte du dernier fait.
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const CIBLE = 67.5;
 const NOTE = "test cible L14";
@@ -30,6 +30,9 @@ async function getTemplate() {
 
 let browser;
 let restore = null;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   const { id: tplId, exos } = await getTemplate();
   const withTarget = exos[0].exercise;
@@ -89,5 +92,8 @@ try {
     }).catch(() => {});
   }
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("séance cible de poids (DOM)") ? process.exitCode ?? 0 : 1);

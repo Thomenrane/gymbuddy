@@ -26,11 +26,11 @@ import { Sheet } from "@/components/ui/sheet";
 import {
   getExercisePrefill,
   saveWorkout,
+  saveWorkoutDraft,
+  deleteWorkoutDraft,
   type DraftExercise,
 } from "@/app/(tabs)/training/training-actions";
 import { PROGRESSION_HINT } from "@/lib/training";
-import { draftKeyOf, nextAddSeq } from "@/lib/session-draft.mjs";
-import { draftsStore } from "@/lib/session-drafts-store";
 import { stepValue } from "@/lib/session-controls.mjs";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import { RestTimer } from "./rest-timer";
@@ -111,6 +111,8 @@ export function SessionEditor({
   date,
   templateId,
   editId,
+  draftId = null,
+  draftStartedAt = null,
   initialExercises,
   catalog,
   initialMeta,
@@ -119,14 +121,18 @@ export function SessionEditor({
   date: string;
   templateId: string | null;
   editId: string | null;
+  /** Lot 27 : brouillon repris depuis la base (ligne « En cours »). */
+  draftId?: string | null;
+  /** Heure de début du brouillon repris — sinon la durée pré-remplie à
+   *  « Terminer » repartirait de zéro à chaque reprise. */
+  draftStartedAt?: number | null;
   initialExercises: EditorExercise[];
   catalog: CatalogItem[];
   initialMeta?: { duration: string; intensity: number | null; notes: string };
 }) {
+  const resumed = draftId != null;
   const router = useRouter();
-  const draftKey = draftKeyOf({ editId, templateId, date });
   const [exercises, setExercises] = useState(initialExercises);
-  const [restored, setRestored] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -155,10 +161,7 @@ export function SessionEditor({
     index: number;
     field: "reps" | "weight";
   } | null>(null);
-  const startedAt = useRef(Date.now());
-  // Lot 22 : rien n'est écrit tant que le PO n'a pas saisi quelque chose —
-  // ouvrir une séance puis repartir ne doit PAS créer de brouillon fantôme.
-  const dirty = useRef(false);
+  const startedAt = useRef(draftStartedAt ?? Date.now());
   // Une séance déjà notée en RPE (édition) affiche la colonne quoi qu'il arrive :
   // on ne masque jamais une donnée saisie.
   const rpeVisible =
@@ -169,95 +172,92 @@ export function SessionEditor({
     ? "grid grid-cols-[1.5rem_1fr_1fr_3.25rem_2rem] items-center gap-1.5"
     : "grid grid-cols-[1.5rem_1fr_1fr_2rem] items-center gap-1.5";
 
-  // Persistance locale : une séance en cours ne doit JAMAIS être perdue.
+  // Lot 27 : la séance en cours vit EN BASE, plus dans le localStorage.
+  //
+  // L'ancienne persistance n'écrivait que si le PO MODIFIAIT une case
+  // (drapeau `dirty`). Or depuis le Lot 19 les cases arrivent pré-remplies à
+  // l'objectif : une séance faite exactement comme prévu ne touchait rien, donc
+  // rien n'était écrit, donc il n'y avait rien à reprendre. Le déclencheur est
+  // maintenant l'OUVERTURE elle-même — choisir un template et arriver ici est
+  // déjà un acte volontaire —, et la ligne « En cours » de l'onglet Training
+  // porte un bouton pour l'abandonner d'un tap.
+  //
+  // Une ÉDITION de séance passée (editId) n'ouvre aucun brouillon : elle a déjà
+  // sa ligne dans `workouts`.
+  const draftIdRef = useRef<string | null>(draftId);
+  const savingRef = useRef(false);
+  // Séance en cours d'enregistrement : plus aucune écriture de brouillon, sinon
+  // un autosave en vol recréerait la ligne « En cours » juste après que
+  // saveWorkout l'a supprimée.
+  const finishingRef = useRef(false);
+  const pendingRef = useRef(false);
+
   useEffect(() => {
-    const stored = draftsStore.get()[draftKey];
-    let saved = stored?.exercises as EditorExercise[] | undefined;
-    let since = stored?.startedAt;
-    let migrated = false;
-    if (!saved) {
-      // Repli sur l'ancien format (une clé par séance). On restaure SANS filtrer
-      // sur la saisie : `touched` n'existe pas avant ce lot, donc tout filtre
-      // fondé dessus rejetterait 100 % des anciens brouillons — y compris une
-      // séance réellement en cours au moment du déploiement. Entre un fantôme
-      // affiché une fois (que « Réinitialiser » balaie) et une séance perdue,
-      // l'invariant du fichier tranche : une séance en cours ne doit JAMAIS
-      // être perdue.
+    if (editId) return;
+    let cancelled = false;
+
+    const flush = async () => {
+      if (cancelled || finishingRef.current) return;
+      // Une seule écriture en vol : sans ce verrou, deux frappes rapprochées
+      // partent en parallèle sans brouillon connu et créent DEUX lignes
+      // « En cours » pour la même séance.
+      if (savingRef.current) {
+        pendingRef.current = true;
+        return;
+      }
+      savingRef.current = true;
       try {
-        const raw = localStorage.getItem(draftKey);
-        const legacy = raw ? JSON.parse(raw) : null;
-        if (Array.isArray(legacy?.exercises) && legacy.exercises.length > 0) {
-          saved = legacy.exercises;
-          since = legacy.startedAt;
-          migrated = true;
-        }
-      } catch {
-        /* draft illisible : on repart du pré-rempli */
-      }
-    }
-    if (Array.isArray(saved) && saved.length > 0) {
-      setExercises(saved);
-      startedAt.current = since ?? Date.now();
-      // Les clés `add-N` restaurées sont déjà prises : le compteur reprend
-      // après, sinon le prochain ajout dupliquerait une clé existante.
-      setAddSeq(nextAddSeq(saved));
-      setRestored(true);
-      // Un brouillon de l'ancien format est migré vers l'index : il devient
-      // visible depuis « Reprendre », effaçable, et soumis à la purge 24 h.
-      if (migrated) {
-        dirty.current = true;
-        // Sans cette suppression, « Abandonner » (qui ne vide que l'index)
-        // laissait l'ancienne clé ressusciter le brouillon au rechargement.
-        try {
-          localStorage.removeItem(draftKey);
-        } catch {
-          /* rien à nettoyer */
+        const res = await saveWorkoutDraft({
+          id: draftIdRef.current,
+          date,
+          type: "muscu",
+          templateId,
+          title,
+          payload: { exercises, startedAt: startedAt.current },
+        });
+        if (cancelled) return;
+        if ("ok" in res) draftIdRef.current = res.id;
+        // Brouillon disparu (terminé ou abandonné ailleurs) : on ne le
+        // ressuscite pas dans le dos du PO, on cesse simplement d'écrire.
+        else if (/introuvable/i.test(res.error)) draftIdRef.current = null;
+      } finally {
+        savingRef.current = false;
+        if (pendingRef.current && !cancelled) {
+          pendingRef.current = false;
+          void flush();
         }
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    };
 
-  // Écrit à chaque changement, mais seulement une fois la séance commencée.
-  useEffect(() => {
-    if (!dirty.current) return;
-    draftsStore.save({
-      key: draftKey,
-      title,
-      date,
-      templateId,
-      editId,
-      startedAt: startedAt.current,
-      updatedAt: Date.now(),
-      exercises,
-    });
-  }, [exercises, draftKey, title, date, templateId, editId]);
+    // Débounce : une séance, c'est des dizaines de frappes ; on n'écrit pas à
+    // chaque caractère.
+    const id = setTimeout(flush, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [exercises, date, templateId, title, editId]);
 
-  function forgetDraft() {
-    draftsStore.remove(draftKey);
-    try {
-      localStorage.removeItem(draftKey); // ancien format
-    } catch {
-      /* rien à nettoyer */
-    }
-    dirty.current = false;
-  }
-
-  function resetDraft() {
-    forgetDraft();
+  /** « Réinitialiser » : on jette le brouillon et on repart du pré-rempli.
+   *  (À l'ENREGISTREMENT, c'est saveWorkout qui l'efface, dans le même
+   *  aller-retour — voir son commentaire.) */
+  async function resetDraft() {
+    const id = draftIdRef.current;
+    draftIdRef.current = null;
+    if (id) await deleteWorkoutDraft(id);
     setFocused(null);
     setExercises(initialExercises);
     // Sans ça, la durée pré-remplie à « Terminer » compte depuis le brouillon
     // jeté — potentiellement plusieurs heures avant la séance réelle.
     startedAt.current = Date.now();
     setAddSeq(0);
-    setRestored(false);
+    setRest(null);
   }
 
-  /** Toute modification VOLONTAIRE passe par ici : c'est ce qui rend le
-   *  brouillon réel, et donc la séance « reprenable » depuis l'onglet Training. */
+  /** Toute modification passe par ici. Depuis le Lot 27 elle ne conditionne
+   *  plus l'existence du brouillon (il naît à l'ouverture) : elle en déclenche
+   *  seulement l'écriture. */
   function mutate(next: (prev: EditorExercise[]) => EditorExercise[]) {
-    dirty.current = true;
     setExercises(next);
   }
 
@@ -346,10 +346,10 @@ export function SessionEditor({
           <ArrowLeft size={16} aria-hidden />
           {date}
         </Link>
-        {restored && (
+        {resumed && (
           <button
             type="button"
-            onClick={resetDraft}
+            onClick={() => void resetDraft()}
             className="text-sm text-muted underline underline-offset-2"
           >
             Réinitialiser
@@ -371,7 +371,7 @@ export function SessionEditor({
           <Question size={18} />
         </button>
       </div>
-      {restored && (
+      {resumed && (
         <p className="text-sm text-accent">Séance en cours restaurée.</p>
       )}
 
@@ -686,8 +686,10 @@ export function SessionEditor({
                 return { reps, weight_kg: weight, rpe };
               }),
             }));
+            finishingRef.current = true;
             const res = await saveWorkout({
               id: editId ?? undefined,
+              draftId: draftIdRef.current,
               date,
               type: "muscu",
               templateId,
@@ -696,8 +698,13 @@ export function SessionEditor({
               notes: meta.notes,
               exercises: payload,
             });
-            if ("error" in res) return res.error;
-            forgetDraft();
+            if ("error" in res) {
+              // Échec : le brouillon existe toujours, on réarme l'autosave —
+              // sinon la suite de la séance ne serait plus enregistrée nulle part.
+              finishingRef.current = false;
+              return res.error;
+            }
+            draftIdRef.current = null;
             router.push(`/training/${res.id}`);
             return null;
           }}

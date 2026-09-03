@@ -104,3 +104,39 @@ export async function swipe(page, selector, dx, dy = 0) {
     fire("touchend", x0 + dx, y0 + dy);
   }, { dx, dy });
 }
+
+/**
+ * Lot 27 : depuis que la séance en cours vit en base, OUVRIR l'écran séance
+ * crée une ligne « En cours » — y compris dans un test. Elle n'est effacée que
+ * par « Terminer » ou « Abandonner », donc un test qui ouvre puis s'arrête
+ * laisse un brouillon dans la vraie base, visible dans l'onglet Training du PO.
+ * (C'est arrivé : 4 lignes fantômes après une passe de contrats.)
+ *
+ * On ne peut pas nettoyer par nom : un brouillon porte le titre du TEMPLATE, y
+ * compris un template réel du PO, et il peut y avoir une séance réellement en
+ * cours. On note donc les ids AVANT, et on ne supprime que le DELTA.
+ */
+export async function draftIdsNow() {
+  const rows = await rest("GET", "/workout_drafts?select=id");
+  return new Set((rows ?? []).map((r) => r.id));
+}
+
+/** Supprime les brouillons apparus depuis `before` — et le dit si ça échoue. */
+export async function cleanupNewDrafts(before) {
+  let after;
+  try {
+    after = await rest("GET", "/workout_drafts?select=id");
+  } catch (e) {
+    console.log(`  ~~ nettoyage brouillons : lecture impossible (${String(e.message).slice(0, 100)})`);
+    return;
+  }
+  const created = (after ?? []).map((r) => r.id).filter((id) => !before.has(id));
+  for (const id of created) {
+    try {
+      await rest("DELETE", `/workout_drafts?id=eq.${id}`);
+    } catch (e) {
+      console.log(`  ~~ nettoyage brouillon ${id} : ${String(e.message).slice(0, 100)}`);
+    }
+  }
+  if (created.length) console.log(`  ..   ${created.length} brouillon(s) de test nettoyé(s)`);
+}

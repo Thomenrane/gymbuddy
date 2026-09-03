@@ -44,8 +44,15 @@ MCP_URL="${MCP_URL:-$RUN_BASE/api/mcp}"
 REST() { curl -s -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/$1"; }
 
 cleanup() {
+  # `npx next start` n'est qu'un LANCEUR : tuer $SERVER_PID laisse vivre le
+  # process `next-server` enfant, qui garde le port. Le contrat suivant croit
+  # démarrer son serveur, échoue silencieusement à se lier, et teste en réalité
+  # le build périmé du serveur resté là — deux faux échecs (Lots 18 et 19) avant
+  # qu'on remonte jusqu'ici. On tue donc les enfants ET ce qui tient le port.
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 

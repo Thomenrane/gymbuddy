@@ -79,6 +79,11 @@ SERVER_PID=$!
 cleanup() {
   kill $SERVER_PID 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  # `npx next start` n'est qu'un lanceur : tuer $SERVER_PID laisse vivre le
+  # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
+  # build périmé (deux faux échecs dans cette session avant qu'on le voie).
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
   # Nettoyage des données de test, même en cas d'échec au milieu du script
   [ -n "${TEST_ID:-}" ] && curl -s -X DELETE "$REST/recipes?id=eq.$TEST_ID" "${SRV[@]}" -o /dev/null || true
   [ -n "${DUP_ID:-}" ] && curl -s -X DELETE "$REST/recipes?id=eq.$DUP_ID" "${SRV[@]}" -o /dev/null || true

@@ -10,6 +10,7 @@ import {
   targetRows,
 } from "@/lib/session-target.mjs";
 import { getExerciseContext } from "@/lib/training-server";
+import { setExerciseTargetWith } from "@/lib/mcp/service";
 import { RUN_TYPES, type RunType, type WorkoutType } from "@/lib/training";
 
 export type SaveResult = { error: string } | { ok: true; id: string };
@@ -112,6 +113,15 @@ async function resolveExerciseId(
  */
 export async function saveWorkout(input: {
   id?: string;
+  /**
+   * Lot 27 : brouillon « En cours » à effacer une fois la séance écrite. Il est
+   * supprimé DANS le même aller-retour, volontairement : effacer depuis le
+   * client juste avant de naviguer faisait courir trois choses l'une contre
+   * l'autre (l'effacement, un autosave encore en vol qui recréait la ligne, et
+   * la navigation) — la redirection après « Enregistrer » en sortait parfois
+   * perdante.
+   */
+  draftId?: string | null;
   date: string;
   type: WorkoutType;
   templateId?: string | null;
@@ -209,6 +219,16 @@ export async function saveWorkout(input: {
         }))
       );
       if (notesErr) throw new Error(notesErr.message);
+    }
+    // La séance est écrite : le brouillon n'a plus lieu d'être. Après les sets,
+    // jamais avant — un échec d'insertion doit laisser le brouillon intact,
+    // sinon la séance serait perdue des deux côtés.
+    if (input.draftId) {
+      const { error: draftErr } = await supabase
+        .from("workout_drafts")
+        .delete()
+        .eq("id", input.draftId);
+      if (draftErr) throw new Error(draftErr.message);
     }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Sauvegarde impossible." };
@@ -312,6 +332,140 @@ export async function archiveTemplate(id: string): Promise<ActionResult> {
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/training/templates");
+  revalidatePath("/training");
+  return { ok: true };
+}
+
+// ---------- Lot 27 : séance EN COURS (table workout_drafts) ----------
+//
+// Le brouillon vivait dans le localStorage du navigateur, et seulement si
+// l'utilisateur MODIFIAIT une case. Depuis le Lot 19 les cases arrivent
+// pré-remplies à l'objectif : une séance faite comme prévu ne touchait rien,
+// donc rien n'était écrit, donc il n'y avait rien à reprendre. Il est
+// maintenant en base — visible sur n'importe quel appareil, et survivant à un
+// vidage des données du site.
+//
+// Il reste HORS de `workouts` : rien de ce qui est à moitié saisi ne doit
+// entrer dans les statistiques, la « dernière fois » ou les résumés MCP.
+
+// PAS de revalidatePath ici, volontairement : cette action tourne toutes les
+// 1,2 s pendant toute la séance, et invalider une route à chaque frappe ferait
+// re-rendre l'arbre client en boucle pendant que le PO saisit. Inutile de
+// surcroît : l'onglet Training est `force-dynamic` et relit les brouillons à
+// chaque navigation. Seuls l'abandon et l'enregistrement invalident.
+export async function saveWorkoutDraft(input: {
+  id?: string | null;
+  date: string;
+  type?: WorkoutType;
+  templateId?: string | null;
+  title: string;
+  payload: unknown;
+}): Promise<SaveResult> {
+  if (!isIsoDate(input.date)) return { error: "Date invalide." };
+  const type = input.type ?? "muscu";
+  if (!TYPES.includes(type)) return { error: "Type invalide." };
+  const title = input.title?.trim() || "Séance";
+
+  const supabase = await createClient();
+  const row = {
+    workout_date: input.date,
+    type,
+    template_id: input.templateId ?? null,
+    title,
+    payload: input.payload as object,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.id) {
+    const { data, error } = await supabase
+      .from("workout_drafts")
+      .update(row)
+      .eq("id", input.id)
+      .select("id")
+      .maybeSingle();
+    if (error) return { error: error.message };
+    // Le brouillon a pu être terminé ou abandonné depuis un autre onglet : on
+    // n'en recrée pas un fantôme dans son dos.
+    if (!data) return { error: "Brouillon introuvable (déjà terminé ou abandonné)." };
+    return { ok: true, id: data.id };
+  }
+
+  const { data, error } = await supabase
+    .from("workout_drafts")
+    .insert(row)
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  return { ok: true, id: data.id };
+}
+
+// Pas de revalidatePath non plus : l'éditeur appelle ceci juste avant de
+// naviguer vers la fiche séance, et invalider une route au moment exact où le
+// routeur pousse une autre URL fait courir les deux l'un contre l'autre. La
+// ligne « En cours » de l'onglet Training rafraîchit elle-même (router.refresh
+// dans DraftCard), et l'onglet est `force-dynamic`.
+export async function deleteWorkoutDraft(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("workout_drafts").delete().eq("id", id);
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
+// ---------- Lot 29 : proposition de progression (✓ / ✗) ----------
+//
+// Le Lot 14 posait que l'app n'écrit JAMAIS de cible — elles venaient toutes de
+// Claude via MCP. Le PO a tranché de l'assouplir pour ce cas précis, et
+// seulement par ce chemin : le ✓ passe par `setExerciseTargetWith`, la MÊME
+// fonction que l'outil MCP (mêmes validations, même garde-fou de signe). Ce
+// n'est donc pas un second écrivain, c'est le même, appelé depuis l'app.
+//
+// Avec le client de SESSION, pas celui du MCP : `mcpDb()` porte la clé
+// service_role et contourne la RLS — un bouton d'interface ne doit pas écrire
+// en privilège élevé. Le garde-fou de verify-lot14.sh vérifie exactement ça.
+
+export async function acceptTargetSuggestion(input: {
+  exercise_name: string;
+  to: number;
+  note?: string | null;
+}): Promise<ActionResult> {
+  if (!Number.isFinite(input.to) || input.to === 0)
+    return { error: "Proposition invalide." };
+  const supabase = await createClient();
+  try {
+    await setExerciseTargetWith(supabase, {
+      exercise_name: input.exercise_name,
+      target_weight_kg: input.to,
+      target_weight_note:
+        input.note?.trim() ||
+        `Progression acceptée : objectif atteint 2 séances d'affilée.`,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Cible non posée." };
+  }
+  // Une cible acceptée périme le refus précédent : la prochaine proposition
+  // portera sur une autre valeur, elle doit pouvoir s'afficher.
+  await supabase
+    .from("exercises")
+    .update({ progression_declined_kg: null })
+    .ilike("name", input.exercise_name.trim());
+  revalidatePath("/training");
+  return { ok: true };
+}
+
+export async function declineTargetSuggestion(input: {
+  exercise_id: string;
+  to: number;
+}): Promise<ActionResult> {
+  if (!Number.isFinite(input.to)) return { error: "Proposition invalide." };
+  const supabase = await createClient();
+  // On mémorise la VALEUR refusée, pas un simple « refusé » : dès que la cible
+  // bouge, la proposition suivante porte sur un autre chiffre et redevient
+  // légitime. Un booléen aurait tu la progression pour toujours.
+  const { error } = await supabase
+    .from("exercises")
+    .update({ progression_declined_kg: input.to })
+    .eq("id", input.exercise_id);
+  if (error) return { error: error.message };
   revalidatePath("/training");
   return { ok: true };
 }

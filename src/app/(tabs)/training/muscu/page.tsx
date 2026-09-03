@@ -6,12 +6,15 @@ import {
   sessionTarget,
   targetRows,
 } from "@/lib/session-target.mjs";
+import { getWorkoutDraft } from "@/lib/workout-drafts-server";
 import {
   getExerciseCatalog,
   getLastSets,
+  getRecentSessions,
   getTemplate,
   getWorkout,
 } from "@/lib/training-server";
+import { suggestNextTarget } from "@/lib/progression.mjs";
 import {
   SessionEditor,
   type EditorExercise,
@@ -35,9 +38,19 @@ const setsToDraft = (
 export default async function MuscuSessionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ template?: string; date?: string; edit?: string }>;
+  searchParams: Promise<{
+    template?: string;
+    date?: string;
+    edit?: string;
+    draft?: string;
+  }>;
 }) {
-  const { template: templateId, date: rawDate, edit: editId } = await searchParams;
+  const {
+    template: templateId,
+    date: rawDate,
+    edit: editId,
+    draft: draftId,
+  } = await searchParams;
   const date = rawDate && isIsoDate(rawDate) ? rawDate : brusselsDay();
   const fullCatalog = await getExerciseCatalog();
   const catalog = fullCatalog.map((e) => ({
@@ -57,8 +70,31 @@ export default async function MuscuSessionPage({
   let initialExercises: EditorExercise[] = [];
   let meta: { duration: string; intensity: number | null; notes: string } | undefined;
   let workoutDate = date;
+  let draftStartedAt: number | null = null;
+  let resumedDraftId: string | null = null;
+  let resumedTemplateId: string | null = null;
 
-  if (editId) {
+  if (draftId) {
+    // Lot 27 : reprise d'une séance en cours. Le brouillon porte l'état exact
+    // de l'éditeur — on ne re-calcule PAS l'objectif par-dessus, sinon la
+    // reprise écraserait ce qui a été saisi.
+    const draft = await getWorkoutDraft(draftId);
+    if (!draft) notFound();
+    const payload = draft.payload as {
+      exercises?: EditorExercise[];
+      startedAt?: number;
+    } | null;
+    const saved = payload?.exercises;
+    if (!Array.isArray(saved) || saved.length === 0) notFound();
+    title = draft.title;
+    workoutDate = draft.workout_date;
+    initialExercises = saved;
+    draftStartedAt = typeof payload?.startedAt === "number" ? payload.startedAt : null;
+    resumedDraftId = draft.id;
+    // Sans ça, la première ré-écriture du brouillon repris perdrait le lien au
+    // template (l'URL de reprise ne porte que ?draft=).
+    resumedTemplateId = draft.template_id;
+  } else if (editId) {
     const workout = await getWorkout(editId);
     if (!workout || workout.type !== "muscu") notFound();
     title = "Modifier la séance";
@@ -101,7 +137,10 @@ export default async function MuscuSessionPage({
     if (!template) notFound();
     title = template.name;
     const exercises = template.template_exercises ?? [];
-    const lastSets = await getLastSets(exercises.map((t) => t.exercise_id));
+    const ids = exercises.map((t) => t.exercise_id);
+    // Lot 29 : deux dernières SÉANCES par exercice — « objectif atteint 2×
+    // d'affilée » ne se juge pas sur la dernière séance seule.
+    const [lastSets, recent] = await Promise.all([getLastSets(ids), getRecentSessions(ids, 2)]);
     initialExercises = exercises.map((tex) => {
       const last = lastSets.get(tex.exercise_id);
       // Lot 19 : les cases portent l'OBJECTIF du jour (template + cible Claude
@@ -114,6 +153,15 @@ export default async function MuscuSessionPage({
         },
         targetWeight: tex.exercise.target_weight_kg,
         last: last ?? null,
+      });
+      // La proposition est calculée à la LECTURE : une proposition stockée
+      // deviendrait fausse dès la séance suivante enregistrée ou corrigée.
+      const suggestion = suggestNextTarget({
+        sessions: recent.get(tex.exercise_id) ?? [],
+        defaults: { repsMax: tex.default_reps_max, targetRpe: tex.target_rpe },
+        signedTarget: tex.exercise.target_weight_kg,
+        step: tex.exercise.progression_step_kg,
+        declined: tex.exercise.progression_declined_kg,
       });
       return {
         key: `tpl-${tex.position}`,
@@ -131,6 +179,7 @@ export default async function MuscuSessionPage({
         targetWeight: tex.exercise.target_weight_kg,
         targetNote: tex.exercise.target_weight_note,
         targetLabel: formatTarget(target),
+        suggestion,
         assist: target.assist,
         sets: targetRows(target),
       };
@@ -141,8 +190,10 @@ export default async function MuscuSessionPage({
     <SessionEditor
       title={title}
       date={workoutDate}
-      templateId={templateId ?? null}
+      templateId={resumedTemplateId ?? templateId ?? null}
       editId={editId ?? null}
+      draftId={resumedDraftId}
+      draftStartedAt={draftStartedAt}
       initialExercises={initialExercises}
       catalog={catalog}
       initialMeta={meta}

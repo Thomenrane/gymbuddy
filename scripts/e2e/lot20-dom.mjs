@@ -11,7 +11,7 @@
 //     pré-remplies à l'objectif + ligne « Dernière »
 //   - exercice CRÉÉ À LA VOLÉE → 3 séries vides, aucune ligne trompeuse
 // Bonus : la recherche ignore les accents (« elevation » trouve « Élévation »).
-import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const D_HIST = "1999-12-16";
 const D_SESS = "1999-12-21";
@@ -26,6 +26,9 @@ async function cleanup() {
 }
 
 let browser;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
 
@@ -108,5 +111,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("ajout d'exercice pré-rempli (DOM)") ? process.exitCode ?? 0 : 1);

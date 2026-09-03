@@ -34,8 +34,15 @@ EDT="src/components/training/session-editor.tsx"
 RUN_BASE="${BASE_URL:-http://localhost:$PORT}"
 
 cleanup() {
+  # `npx next start` n'est qu'un LANCEUR : tuer $SERVER_PID laisse vivre le
+  # process `next-server` enfant, qui garde le port. Le contrat suivant croit
+  # démarrer son serveur, échoue silencieusement à se lier, et teste en réalité
+  # le build périmé du serveur resté là — deux faux échecs (Lots 18 et 19) avant
+  # qu'on remonte jusqu'ici. On tue donc les enfants ET ce qui tient le port.
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -57,9 +64,26 @@ grep -q "localeCompare" "$SRV" && ok "choix déterministe quand plusieurs templa
 # Une LECTURE (« exercise.target_weight_kg », y compris suivie d'une virgule)
 # n'est ni l'une ni l'autre. Effacer aveuglément tout ce qui suit un point —
 # ce que faisait la version précédente — laissait passer les affectations.
+# Lot 29 : l'app a désormais LE DROIT de nommer target_weight_kg — mais
+# seulement pour le passer à `setExerciseTargetWith`, la fonction partagée avec
+# l'outil MCP. Ce qui reste interdit, c'est d'écrire la colonne SOI-MÊME, avec
+# ses propres règles. On retire donc du fichier les arguments passés à cette
+# fonction avant d'appliquer la détection : sans ça, le chemin autorisé se
+# faisait refuser par le garde-fou censé le protéger.
+strip_shared_call() {
+  awk '
+    /setExerciseTargetWith\(/ { skip = 1 }
+    skip && /^[[:space:]]*\}\);?[[:space:]]*$/ { skip = 0; next }
+    !skip { print }
+  ' "$1"
+}
 target_write() {
-  grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" "$@" && return 0
-  grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" "$@" && return 0
+  for f in "$@"; do
+    strip_shared_call "$f" \
+      | grep -qE "(^|[^.[:alnum:]_])target_weight_(kg|note)[[:space:]]*([:,}]|\")" && return 0
+    strip_shared_call "$f" \
+      | grep -qE "target_weight_(kg|note)[[:space:]]*=[^=>]" && return 0
+  done
   return 1
 }
 if target_write "$ACT"; then

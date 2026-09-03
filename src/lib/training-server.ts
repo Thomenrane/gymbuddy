@@ -198,3 +198,62 @@ export async function getLastSets(
   return latestSetsByExercise((data ?? []) as unknown as LastSetRow[]);
 }
 
+
+/**
+ * Lot 29 : les N dernières SÉANCES par exercice (pas les N dernières séries),
+ * pour juger « objectif atteint 2× d'affilée ».
+ *
+ * Comme au Lot 25, le tri est fait en base : rapatrier tout l'historique pour
+ * garder deux séances serait un retour en arrière. Si la fonction n'est pas
+ * encore appliquée, on renvoie une carte VIDE — aucune proposition ne sera
+ * faite, ce qui est le bon défaut : mieux vaut ne rien proposer que proposer
+ * sur des données tronquées.
+ */
+export async function getRecentSessions(
+  exerciseIds: string[],
+  sessions = 2
+): Promise<Map<string, { sets: { reps: number | null; weight_kg: number | null; rpe: number | null }[] }[]>> {
+  const out = new Map<
+    string,
+    { sets: { reps: number | null; weight_kg: number | null; rpe: number | null }[] }[]
+  >();
+  if (exerciseIds.length === 0) return out;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("recent_sets_by_exercise", {
+    exercise_ids: exerciseIds,
+    sessions,
+  });
+  if (error) {
+    console.warn(
+      `recent_sets_by_exercise indisponible (${error.message}) : aucune proposition de progression. ` +
+        "Appliquer supabase/migrations/20260903000003_progression.sql."
+    );
+    return out;
+  }
+  type Row = {
+    exercise_id: string;
+    session_rank: number;
+    reps: number | null;
+    weight_kg: number | null;
+    rpe: number | null;
+  };
+  // session_rank = 1 pour la séance la plus récente : le module de progression
+  // attend exactement cet ordre.
+  const byExercise = new Map<string, Map<number, Row[]>>();
+  for (const r of (data ?? []) as Row[]) {
+    const ranks = byExercise.get(r.exercise_id) ?? new Map<number, Row[]>();
+    ranks.set(r.session_rank, [...(ranks.get(r.session_rank) ?? []), r]);
+    byExercise.set(r.exercise_id, ranks);
+  }
+  for (const [exerciseId, ranks] of byExercise) {
+    out.set(
+      exerciseId,
+      [...ranks.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, rows]) => ({
+          sets: rows.map((r) => ({ reps: r.reps, weight_kg: r.weight_kg, rpe: r.rpe })),
+        }))
+    );
+  }
+  return out;
+}

@@ -8,7 +8,7 @@
 // longue, un historique 3×6 @ 67,5 et un template 4 séries / 4-6 reps / RPE 8 /
 // repos 150 s. Objectif attendu = 4×6 @ 67.5 kg (charge inchangée → on garde le
 // haut de fourchette déjà tenu). Nettoyage complet en sortie.
-import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const D_HIST = "1999-12-17";
 const D_SESS = "1999-12-20";
@@ -26,6 +26,9 @@ async function cleanup() {
 }
 
 let browser;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
 
@@ -138,5 +141,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("séance : densité + objectif (DOM)") ? process.exitCode ?? 0 : 1);

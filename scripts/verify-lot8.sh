@@ -34,6 +34,11 @@ jget() { node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const 
 cleanup() {
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  # `npx next start` n'est qu'un lanceur : tuer $SERVER_PID laisse vivre le
+  # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
+  # build périmé (deux faux échecs dans cette session avant qu'on le voie).
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
   curl -s -X DELETE "$REST/meal_plan_entries?plan_date=gte.1999-08-02&plan_date=lte.1999-08-08" "${SRV[@]}" -o /dev/null || true
   curl -s -X DELETE "$REST/meal_logs?log_date=gte.1999-08-02&log_date=lte.1999-08-08" "${SRV[@]}" -o /dev/null || true
 }

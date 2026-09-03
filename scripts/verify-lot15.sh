@@ -31,6 +31,11 @@ RUN_BASE="${BASE_URL:-http://localhost:$PORT}"
 cleanup() {
   kill "${SERVER_PID:-0}" 2>/dev/null || true
   pkill -f "next start -p $PORT" 2>/dev/null || true
+  # `npx next start` n'est qu'un lanceur : tuer $SERVER_PID laisse vivre le
+  # `next-server` enfant, qui garde le port — le contrat suivant teste alors un
+  # build périmé (deux faux échecs dans cette session avant qu'on le voie).
+  [ -n "${SERVER_PID:-}" ] && pkill -P "$SERVER_PID" 2>/dev/null || true
+  fuser -k "$PORT/tcp" >/dev/null 2>&1 || true
   curl -s -X DELETE "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/meal_plan_entries?plan_date=eq.1999-11-08" \
     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" -o /dev/null || true
 }

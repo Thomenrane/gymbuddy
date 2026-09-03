@@ -5,7 +5,7 @@
 //   2. la « dernière fois » reste juste quel que soit le chemin actif (RPC
 //      latest_sets_by_exercise si la migration est appliquée, ancienne requête
 //      sinon) : c'est ce qui rend le repli sûr
-import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const D_HIST = "1999-12-24";
 const D_SESS = "1999-12-25";
@@ -20,6 +20,9 @@ async function cleanup() {
 }
 
 let browser;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
   const [exo] = await rest("POST", "exercises", { name: EXO, measure_type: "reps" });
@@ -91,5 +94,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("cohérence de lecture (DOM)") ? process.exitCode ?? 0 : 1);

@@ -4,7 +4,7 @@
 //   - `rest_seconds` du template n'était qu'un texte affiché, aucun chrono
 //   - saisir « 67.5 » au clavier numérique entre deux séries est le vrai frein
 //   - l'écran s'éteint pendant le repos et il faut déverrouiller à chaque série
-import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames, draftIdsNow, cleanupNewDrafts } from "./lib.mjs";
 
 const D_SESS = "1999-12-23";
 const EXO = "__CONFORT_DOM__";
@@ -17,6 +17,9 @@ async function cleanup() {
 }
 
 let browser;
+// Lot 27 : ouvrir l'écran séance crée une ligne « En cours » en base — on note
+// les brouillons existants pour ne supprimer que ceux que CE test aura créés.
+const draftsBefore = await draftIdsNow();
 try {
   await cleanup();
   const [exo] = await rest("POST", "exercises", { name: EXO, measure_type: "reps" });
@@ -110,5 +113,8 @@ try {
 } finally {
   await cleanup();
   await browser?.close();
+  // Après la fermeture SEULEMENT : un autosave encore en vol recréerait
+  // sinon la ligne « En cours » juste après sa suppression.
+  await cleanupNewDrafts(draftsBefore);
 }
 process.exit(summary("confort en salle (DOM)") ? process.exitCode ?? 0 : 1);

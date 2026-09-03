@@ -12,6 +12,7 @@ import { getWeekPlan } from "@/lib/plan-server";
 import { getPickerRecipes, getTargets } from "@/lib/today-server";
 import { getPartnerProfile } from "@/lib/partner-server";
 import { OilyFishCounter } from "@/components/trends/oily-fish-counter";
+import { PlanScanButton } from "@/components/plan/scan-button";
 import {
   PlanDay,
   PlanProvider,
@@ -71,6 +72,9 @@ export default async function PlanPage({
             <ShoppingCart size={16} aria-hidden />
             Courses
           </Link>
+          {/* Lot 28 : le scan était enfoui à trois taps dans /journal, alors
+              qu'on scanne justement au moment où on a le produit en main. */}
+          <PlanScanButton date={today} />
           <Link
             href="/journal"
             aria-label="Journal du jour"

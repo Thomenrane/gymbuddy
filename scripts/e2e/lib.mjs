@@ -23,9 +23,19 @@ export function check(label, cond, detail = "") {
   if (!cond) failures += 1;
   return cond;
 }
+/**
+ * Fin de suite : imprime le bilan ET SORT EN ERREUR s'il y a des échecs.
+ *
+ * Cette fonction se contentait de `return failures === 0` — que personne
+ * n'utilisait. Résultat : une suite DOM pouvait afficher « FAIL » sur dix
+ * assertions et sortir avec le code 0, donc le contrat qui l'appelle la voyait
+ * verte. Seule une EXCEPTION la faisait tomber. Tout le volet DOM des contrats
+ * était donc décoratif : il montrait les échecs sans jamais les faire compter.
+ */
 export function summary(name) {
   console.log(failures === 0 ? `  → ${name} : tous passent` : `  → ${failures} échec(s)`);
-  return failures === 0;
+  if (failures > 0) process.exit(1);
+  return true;
 }
 
 export async function rest(method, path, body) {

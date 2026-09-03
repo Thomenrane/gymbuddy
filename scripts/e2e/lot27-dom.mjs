@@ -84,6 +84,55 @@ try {
     await page.locator("input").first().inputValue()
   );
 
+  // --- 4bis. Frappes rapprochées : la DERNIÈRE gagne, et une seule ligne
+  //
+  // Le premier jet perdait cette saisie : une frappe arrivant pendant une
+  // écriture en vol posait un drapeau « à refaire » que la fin de l'écriture
+  // n'honorait pas (l'effet qui l'avait lancée venait d'être nettoyé par cette
+  // frappe même). Et l'id revenu était jeté dans ce cas, ce qui faisait créer
+  // une SECONDE ligne « En cours » pour la même séance.
+  const inputs = page.locator("input");
+  for (const v of ["8", "9", "10"]) {
+    await inputs.first().fill(v);
+    await page.waitForTimeout(400); // sous le débounce : les écritures se chevauchent
+  }
+  await page.waitForTimeout(3000);
+  const afterBurst = await rest(
+    "GET",
+    `/workout_drafts?select=id,payload&title=eq.${encodeURIComponent(TPL)}`
+  );
+  check(
+    "frappes rapprochées → toujours UNE seule ligne « En cours »",
+    afterBurst.length === 1,
+    `${afterBurst.length} ligne(s)`
+  );
+  const savedReps = afterBurst[0]?.payload?.exercises?.[0]?.sets?.[0]?.reps;
+  check(
+    "frappes rapprochées → la DERNIÈRE saisie est bien celle enregistrée",
+    String(savedReps) === "10",
+    `en base : ${savedReps}`
+  );
+
+  // --- 4ter. Quitter l'écran pendant le débounce ne perd pas la frappe
+  //
+  // Navigation INTERNE (l'onglet Training), pas un page.goto : c'est ainsi
+  // qu'on quitte une séance dans l'app, et c'est le seul cas où React démonte
+  // le composant et peut donc écrire avant de partir. Un rechargement dur ou
+  // une app tuée par l'OS restent hors de portée — au pire 1,2 s de frappe.
+  await inputs.first().fill("11");
+  await page.getByRole("link", { name: "Training" }).click();
+  await page.waitForURL(/\/training(\?|$)/, { timeout: 15000 });
+  await page.waitForTimeout(2000);
+  const afterLeave = await rest(
+    "GET",
+    `/workout_drafts?select=payload&title=eq.${encodeURIComponent(TPL)}`
+  );
+  check(
+    "quitter juste après avoir tapé → la frappe est quand même enregistrée",
+    String(afterLeave[0]?.payload?.exercises?.[0]?.sets?.[0]?.reps) === "11",
+    `en base : ${afterLeave[0]?.payload?.exercises?.[0]?.sets?.[0]?.reps}`
+  );
+
   // --- 5. Un seul brouillon, pas un par frappe
   const drafts = await rest("GET", `/workout_drafts?select=id,title&title=eq.${encodeURIComponent(TPL)}`);
   check("une seule ligne « En cours » pour une séance", drafts.length === 1, `${drafts.length} ligne(s)`);

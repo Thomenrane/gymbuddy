@@ -95,6 +95,13 @@ grep -q "if (editId) return;" "$EDT" \
   && ok "l'édition d'une séance passée ne crée pas de brouillon" || ko "l'édition créerait un brouillon parasite"
 grep -q "if (savingRef.current)" "$EDT" \
   && ok "une seule écriture en vol (pas deux lignes « En cours » pour une séance)" || ko "écritures concurrentes possibles"
+# `flush` doit lire l'état dans une REF, pas dans la fermeture d'un effet :
+# sinon une écriture relancée réécrit une saisie périmée, et le droit d'écrire
+# meurt avec le rendu qui l'a déclenché — la dernière frappe est perdue.
+grep -q "const snap = latestRef.current;" "$EDT" \
+  && ok "l'écriture lit le dernier état (ref), pas une fermeture périmée" || ko "état lu dans une fermeture : la dernière frappe peut être perdue"
+grep -q "void flushRef.current();" "$EDT" \
+  && ok "quitter l'écran écrit immédiatement (pas de frappe perdue dans le débounce)" || ko "la dernière frappe reste dans le débounce"
 # L'effacement se fait DANS saveWorkout, même aller-retour : effacer côté
 # client juste avant de naviguer faisait courir l'effacement, un autosave en vol
 # et la navigation les uns contre les autres — la redirection après

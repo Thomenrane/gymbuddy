@@ -202,52 +202,81 @@ export function SessionEditor({
   // saveWorkout l'a supprimée.
   const finishingRef = useRef(false);
   const pendingRef = useRef(false);
-
+  // Dernier état à écrire. `flush` lit ICI, jamais la fermeture d'un effet :
+  // une écriture relancée doit porter la DERNIÈRE saisie, pas celle d'il y a
+  // deux frappes.
+  const latestRef = useRef({ exercises, date, templateId, title });
   useEffect(() => {
-    if (editId) return;
-    let cancelled = false;
+    latestRef.current = { exercises, date, templateId, title };
+  });
 
-    const flush = async () => {
-      if (cancelled || finishingRef.current) return;
-      // Une seule écriture en vol : sans ce verrou, deux frappes rapprochées
-      // partent en parallèle sans brouillon connu et créent DEUX lignes
-      // « En cours » pour la même séance.
+  /**
+   * Écriture du brouillon, sérialisée. Volontairement SANS dépendance à un
+   * effet : le droit d'écrire ne doit pas mourir avec le rendu qui l'a
+   * déclenché.
+   *
+   * Trois pièges, tous rencontrés :
+   *  - une frappe pendant une écriture en vol pose `pendingRef` ; si la relance
+   *    dépendait du drapeau `cancelled` de l'effet qui a lancé l'écriture, elle
+   *    serait sautée (cet effet vient justement d'être nettoyé par la frappe) —
+   *    et la dernière saisie ne serait jamais écrite ;
+   *  - l'id revenu doit être retenu MÊME si le composant a bougé entre-temps :
+   *    la ligne existe en base, l'oublier ferait créer un second « En cours » ;
+   *  - deux écritures en parallèle sans brouillon connu créent deux lignes,
+   *    d'où le verrou.
+   */
+  // Dans une ref, pas dans un useCallback : `flush` ne lit QUE des refs, donc
+  // aucune mémoïsation n'est nécessaire — et un useCallback ici fait échouer la
+  // compilation React (« existing memoization could not be preserved »).
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    flushRef.current = async () => {
+      if (finishingRef.current) return;
       if (savingRef.current) {
         pendingRef.current = true;
         return;
       }
       savingRef.current = true;
       try {
+        const snap = latestRef.current;
         const res = await saveWorkoutDraft({
           id: draftIdRef.current,
-          date,
+          date: snap.date,
           type: "muscu",
-          templateId,
-          title,
-          payload: { exercises, startedAt: startedAt.current },
+          templateId: snap.templateId,
+          title: snap.title,
+          payload: { exercises: snap.exercises, startedAt: startedAt.current },
         });
-        if (cancelled) return;
         if ("ok" in res) draftIdRef.current = res.id;
         // Brouillon disparu (terminé ou abandonné ailleurs) : on ne le
         // ressuscite pas dans le dos du PO, on cesse simplement d'écrire.
         else if (/introuvable/i.test(res.error)) draftIdRef.current = null;
       } finally {
         savingRef.current = false;
-        if (pendingRef.current && !cancelled) {
+        if (pendingRef.current) {
           pendingRef.current = false;
-          void flush();
+          void flushRef.current();
         }
       }
     };
+  });
 
-    // Débounce : une séance, c'est des dizaines de frappes ; on n'écrit pas à
-    // chaque caractère.
-    const id = setTimeout(flush, 1200);
-    return () => {
-      cancelled = true;
-      clearTimeout(id);
-    };
+  // Débounce : une séance, c'est des dizaines de frappes ; on n'écrit pas à
+  // chaque caractère. En quittant l'écran, on écrit TOUT DE SUITE — sinon la
+  // dernière frappe, encore dans le débounce, serait perdue au moment précis
+  // où le brouillon sert à quelque chose.
+  useEffect(() => {
+    if (editId) return;
+    const id = setTimeout(() => void flushRef.current(), 1200);
+    return () => clearTimeout(id);
   }, [exercises, date, templateId, title, editId]);
+
+  useEffect(() => {
+    if (editId) return;
+    return () => {
+      void flushRef.current();
+    };
+  }, [editId]);
 
   /** Proposition encore à trancher pour cet exercice. */
   function pendingSuggestion(ex: EditorExercise) {

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Barcode, Plus } from "@phosphor-icons/react/dist/ssr";
+import { ListBullets, Plus } from "@phosphor-icons/react/dist/ssr";
 import { getActiveRecipes } from "@/lib/recipes-server";
 import { RecipesList } from "@/components/recipes/recipes-list";
 
@@ -17,12 +17,16 @@ export default async function RecettesPage() {
         <span className="text-sm text-muted">{recipes.length} actives</span>
       </div>
 
+      {/* Lot 28 : le scan a déménagé sur l'accueil (PO). Ce lien reste, mais il
+          ne se présente plus comme un scanner : ce qu'on vient y faire, c'est
+          gérer la référence ingrédients — la page /recettes/ingredients n'a pas
+          d'autre porte d'entrée. */}
       <Link
         href="/recettes/ingredients"
         className="flex h-11 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium"
       >
-        <Barcode size={18} className="text-muted" aria-hidden />
-        Ingrédients &amp; scan de produits
+        <ListBullets size={18} className="text-muted" aria-hidden />
+        Référence ingrédients
       </Link>
 
       <RecipesList recipes={recipes} />

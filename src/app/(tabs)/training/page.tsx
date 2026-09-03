@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowSquareOut, CaretLeft, CaretRight, Plus, Notebook } from "@phosphor-icons/react/dist/ssr";
+import { CaretLeft, CaretRight, Plus, Notebook } from "@phosphor-icons/react/dist/ssr";
 import { brusselsDay, isIsoDate } from "@/lib/brussels-day.mjs";
 import { getDayWorkouts, getMonthWorkouts } from "@/lib/training-server";
 import { WorkoutCard } from "@/components/training/workout-card";
@@ -152,21 +152,15 @@ export default async function TrainingPage({
           encore (elle n'est pas en base tant qu'elle n'est pas terminée). */}
       <ResumeCard today={today} />
 
-      {/* Aperçu inline de la séance du jour sélectionné : plus besoin d'ouvrir
-          la vue jour pour un simple coup d'œil. Le lien mène au détail complet. */}
+      {/* Aperçu inline de la séance du jour sélectionné. Lot 28 : le lien
+          « Ouvrir le jour » a sauté — la vue jour ne montrait rien de plus que
+          cet aperçu, et chaque carte mène déjà au détail de sa séance. La route
+          /training/day reste vivante : c'est là qu'on retombe après avoir
+          enregistré, modifié ou supprimé une séance (5 appelants). */}
       <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium capitalize text-muted">
-            {dayLabel(selectedDate)}
-          </h2>
-          <Link
-            href={`/training/day/${selectedDate}`}
-            className="inline-flex items-center gap-1 text-xs text-muted active:text-foreground"
-          >
-            Ouvrir le jour
-            <ArrowSquareOut size={13} aria-hidden />
-          </Link>
-        </div>
+        <h2 className="text-sm font-medium capitalize text-muted">
+          {dayLabel(selectedDate)}
+        </h2>
 
         {dayWorkouts.length === 0 ? (
           <Link

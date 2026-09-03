@@ -29,7 +29,7 @@ export function DayNav({ date, streak }: { date: string; streak: number }) {
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1">
         <Link
-          href={`/?date=${prev}`}
+          href={`/journal?date=${prev}`}
           aria-label="Jour précédent"
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
         >
@@ -44,7 +44,7 @@ export function DayNav({ date, streak }: { date: string; streak: number }) {
           </span>
         ) : (
           <Link
-            href={`/?date=${next}`}
+            href={`/journal?date=${next}`}
             aria-label="Jour suivant"
             className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
           >
@@ -61,7 +61,7 @@ export function DayNav({ date, streak }: { date: string; streak: number }) {
           </span>
         )}
         <Link
-          href="/plan"
+          href="/"
           aria-label="Plan de la semaine"
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
         >

@@ -4,7 +4,7 @@
 // quand même (note facultative, jamais bloquante). Après enregistrement, la
 // fiche séance affiche la note sous le bon exercice, la DB ne contient qu'UNE
 // ligne workout_exercise_notes, et la note de séance globale reste distincte.
-import { authedBrowser, rest, check, summary, BASE } from "./lib.mjs";
+import { authedBrowser, rest, check, summary, BASE, deleteByNames } from "./lib.mjs";
 
 const D = "1999-12-19";
 const EXO_A = "__NOTE_DOM_A__";
@@ -13,7 +13,7 @@ const NOTE = "douleur épaule test lot18";
 
 async function cleanup() {
   await rest("DELETE", `workouts?workout_date=eq.${D}`).catch(() => {});
-  await rest("DELETE", `exercises?name=like.__NOTE_DOM_%`).catch(() => {});
+  await deleteByNames("exercises", [EXO_A, EXO_B]);
 }
 
 let browser, page;

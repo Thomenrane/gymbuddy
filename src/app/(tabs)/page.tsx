@@ -1,97 +1,136 @@
-import { brusselsDay, isIsoDate } from "@/lib/brussels-day.mjs";
-import { SLOT_ORDER, dayTotals } from "@/lib/today";
+import Link from "next/link";
 import {
-  getBodyMetric,
-  getDayLogs,
-  getPickerRecipes,
-  getStreak,
-  getTargets,
-} from "@/lib/today-server";
-import { getDayPlan } from "@/lib/plan-server";
+  CaretLeft,
+  CaretRight,
+  ForkKnife,
+  GearSix,
+  ShoppingCart,
+} from "@phosphor-icons/react/dist/ssr";
+import { brusselsDay, isIsoDate, mondayOf, shiftDay } from "@/lib/brussels-day.mjs";
+import { oilyFishCount } from "@/lib/oily-fish.mjs";
+import { getWeekPlan } from "@/lib/plan-server";
+import { getPickerRecipes, getTargets } from "@/lib/today-server";
 import { getPartnerProfile } from "@/lib/partner-server";
-import type { PlanSuggestionData } from "@/components/today/plan-suggestion";
-import { DayNav } from "@/components/today/day-nav";
-import { DaySwipe } from "@/components/today/day-swipe";
-import { MacroSummary } from "@/components/today/macro-summary";
-import { PartnerSummary } from "@/components/today/partner-summary";
-import { SlotSection } from "@/components/today/slot-section";
-import { WeightWidget } from "@/components/today/weight-widget";
-import { TodayProvider, type PickerItem } from "@/components/today/add-log";
+import { OilyFishCounter } from "@/components/trends/oily-fish-counter";
+import {
+  PlanDay,
+  PlanProvider,
+  type PlanPickerItem,
+} from "@/components/plan/plan-week";
 
 export const dynamic = "force-dynamic";
 
-export default async function AujourdhuiPage({
+const RANGE_FMT = new Intl.DateTimeFormat("fr-FR", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+const fmtDay = (iso: string) => RANGE_FMT.format(new Date(`${iso}T12:00:00Z`));
+
+export default async function PlanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ week?: string }>;
 }) {
-  const { date: rawDate } = await searchParams;
+  const { week } = await searchParams;
   const today = brusselsDay();
-  const date = rawDate && isIsoDate(rawDate) && rawDate <= today ? rawDate : today;
+  const monday = mondayOf(week && isIsoDate(week) ? week : today);
+  const sunday = shiftDay(monday, 6);
+  const days = Array.from({ length: 7 }, (_, i) => shiftDay(monday, i));
 
-  const [targets, logs, metric, streak, recipes, planned, partner] =
-    await Promise.all([
-      getTargets(),
-      getDayLogs(date),
-      getBodyMetric(date),
-      getStreak(today),
-      getPickerRecipes(),
-      getDayPlan(date),
-      getPartnerProfile(),
-    ]);
+  const [entries, targets, recipes, partner] = await Promise.all([
+    getWeekPlan(monday),
+    getTargets(),
+    getPickerRecipes(),
+    getPartnerProfile(),
+  ]);
 
-  const totals = dayTotals(logs);
-  const suggestions = new Map<string, PlanSuggestionData>(
-    planned
-      .filter((e) => e.recipe)
-      .map((e) => {
-        const factor = Number(e.portion_factor) || 1;
-        return [
-          e.slot,
-          {
-            entryId: e.id,
-            recipeId: e.recipe_id,
-            recipeName: e.recipe!.name,
-            portionFactor: factor,
-            kcal: Math.round(e.recipe!.kcal * factor),
-          },
-        ];
-      })
-  );
-  const picker: PickerItem[] = recipes.map((r) => ({
+  const picker: PlanPickerItem[] = recipes.map((r) => ({
     id: r.id,
     name: r.name,
     category: r.category,
     kcal: r.kcal,
     protein_g: Number(r.protein_g),
-    prep_min: r.prep_min,
-    lastLoggedAt: r.lastLoggedAt,
   }));
+  const oilyFish = oilyFishCount(
+    entries.map((e) => ({ tags: e.recipe?.tags ?? null }))
+  );
 
   return (
-    <DaySwipe date={date} today={today}>
-      <main className="space-y-4">
-        <DayNav date={date} streak={streak} />
-        <MacroSummary totals={totals} targets={targets} />
-        {partner.is_active && <PartnerSummary logs={logs} partner={partner} />}
-        <WeightWidget key={date + (metric?.id ?? "")} date={date} metric={metric} />
-        <TodayProvider
-          date={date}
-          recipes={picker}
-          couple={partner.is_active ? { name: partner.name } : null}
+    <main className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold tracking-tight">Plan</h1>
+        {/* Lot 23 : le Plan est l'accueil. Le journal du jour et les réglages
+            n'étaient atteignables que depuis l'ancien onglet 1 — ils vivent
+            maintenant ici, sinon ils deviennent orphelins. */}
+        <div className="flex items-center gap-1">
+          <Link
+            href={`/plan/courses?week=${monday}`}
+            className="flex h-10 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-sm font-medium active:bg-surface-raised"
+          >
+            <ShoppingCart size={16} aria-hidden />
+            Courses
+          </Link>
+          <Link
+            href="/journal"
+            aria-label="Journal du jour"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
+          >
+            <ForkKnife size={20} />
+          </Link>
+          <Link
+            href="/reglages"
+            aria-label="Réglages"
+            className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
+          >
+            <GearSix size={20} />
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-1 py-1">
+        <Link
+          href={`/?week=${shiftDay(monday, -7)}`}
+          aria-label="Semaine précédente"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface-raised"
         >
-          <div className="space-y-4">
-            {SLOT_ORDER.map((slot) => (
-              <SlotSection
-                key={slot}
-                slot={slot}
-                logs={logs.filter((l) => l.slot === slot)}
-                suggestion={suggestions.get(slot)}
-              />
-            ))}
-          </div>
-        </TodayProvider>
-      </main>
-    </DaySwipe>
+          <CaretLeft size={20} />
+        </Link>
+        <span className="text-sm font-medium tabular-nums">
+          {fmtDay(monday)} – {fmtDay(sunday)}
+          {monday === mondayOf(today) && (
+            <span className="ml-1.5 text-xs font-normal text-muted">
+              cette semaine
+            </span>
+          )}
+        </span>
+        <Link
+          href={`/?week=${shiftDay(monday, 7)}`}
+          aria-label="Semaine suivante"
+          className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface-raised"
+        >
+          <CaretRight size={20} />
+        </Link>
+      </div>
+
+      <OilyFishCounter count={oilyFish} />
+
+      <PlanProvider
+        recipes={picker}
+        couple={partner.is_active ? { name: partner.name } : null}
+      >
+        <div className="space-y-3">
+          {days.map((date) => (
+            <PlanDay
+              key={date}
+              date={date}
+              entries={entries.filter((e) => e.plan_date === date)}
+              targets={targets}
+              isToday={date === today}
+            />
+          ))}
+        </div>
+      </PlanProvider>
+    </main>
   );
 }

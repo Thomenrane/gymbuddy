@@ -74,9 +74,9 @@ export function DaySwipe({
     const { prev, next } = dayNavTargets(date, today);
 
     if (dx >= THRESHOLD) {
-      router.push(`/?date=${prev}`); // swipe → : jour précédent
+      router.push(`/journal?date=${prev}`); // swipe → : jour précédent
     } else if (dx <= -THRESHOLD && next) {
-      router.push(`/?date=${next}`); // swipe ← : jour suivant
+      router.push(`/journal?date=${next}`); // swipe ← : jour suivant
     } else {
       setTransform(0, 1, true); // trop court : retour élastique
     }

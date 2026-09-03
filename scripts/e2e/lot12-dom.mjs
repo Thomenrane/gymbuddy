@@ -28,6 +28,18 @@ try {
     waitUntil: "networkidle",
   });
 
+  // Lot 19 (décision PO) : la colonne RPE est MASQUÉE par défaut — un tiers de
+  // la largeur pour un champ rarement rempli. Le champ n'a pas disparu : on
+  // l'affiche via la préférence, puis tout le contrat du Lot 12 est revérifié
+  // à l'identique (présent par série, vide par défaut, jamais bloquant).
+  check(
+    "Lot 19 : colonne RPE masquée par défaut",
+    (await page.getByLabel(/RPE ressenti/i).count()) === 0
+  );
+  await page.getByLabel("Aide : double progression, RPE, affichage").click();
+  await page.getByRole("switch", { name: "Afficher la colonne RPE" }).click();
+  await page.getByRole("button", { name: "Fermer" }).first().click();
+
   const rpeInputs = page.getByLabel(/RPE ressenti/i);
   const count = await rpeInputs.count();
   check("champ RPE optionnel présent par série", count >= 1, `trouvés: ${count}`);

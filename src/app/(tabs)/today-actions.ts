@@ -69,7 +69,7 @@ export async function logMealFromRecipe(input: {
   });
   if (error) return bad(`Log impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   return { ok: true };
 }
 
@@ -107,7 +107,7 @@ export async function logFreeMeal(input: {
   });
   if (error) return bad(`Log impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   return { ok: true };
 }
 
@@ -147,7 +147,7 @@ export async function updateMealLog(
     .eq("id", id);
   if (error) return bad(`Sauvegarde impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   return { ok: true };
 }
 
@@ -155,7 +155,7 @@ export async function deleteMealLog(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("meal_logs").delete().eq("id", id);
   if (error) return bad(`Suppression impossible : ${error.message}`);
-  revalidatePath("/");
+  revalidatePath("/journal");
   return { ok: true };
 }
 
@@ -181,7 +181,7 @@ export async function upsertBodyMetric(input: {
     );
   if (error) return bad(`Pesée impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   return { ok: true };
 }
 
@@ -209,8 +209,11 @@ export async function updateTargets(input: {
     .eq("id", 1);
   if (error) return bad(`Sauvegarde impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   revalidatePath("/reglages");
+  // Le Plan (accueil) consomme aussi les cibles : il colore chaque jour de la
+  // semaine par écart aux kcal/protéines. Sans ça il les compare aux anciennes.
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -244,9 +247,9 @@ export async function updatePartnerProfile(input: {
     .eq("id", 1);
   if (error) return bad(`Sauvegarde impossible : ${error.message}`);
 
-  revalidatePath("/");
+  revalidatePath("/journal");
   revalidatePath("/reglages");
-  revalidatePath("/plan");
+  revalidatePath("/"); // le Plan est l'accueil (Lot 23)
   return { ok: true };
 }
 

@@ -42,6 +42,27 @@ export async function rest(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
+/**
+ * Supprime des lignes par NOM EXACT. À utiliser pour tout nettoyage de données
+ * de test — jamais un motif.
+ *
+ * `name=like.__FOO_%` ne nettoie RIEN : en SQL LIKE les « _ » sont des jokers
+ * d'un caractère et le « % » final est pris au pied de la lettre. Le motif ne
+ * matche donc jamais rien, et l'échec est silencieux — des templates de test
+ * `is_active` sont restés en base et apparaissaient dans « Nouvelle séance ».
+ * Un motif trop large serait pire encore : il effacerait de vraies données.
+ */
+export async function deleteByNames(table, names) {
+  for (const name of names) {
+    try {
+      await rest("DELETE", `${table}?name=eq.${encodeURIComponent(name)}`);
+    } catch (e) {
+      // Visible plutôt que silencieux : un nettoyage qui échoue doit se voir.
+      console.log(`  ~~ nettoyage ${table} « ${name} » : ${String(e.message).slice(0, 120)}`);
+    }
+  }
+}
+
 /** Lance un navigateur + un contexte mobile tactile AUTHENTIFIÉ. */
 export async function authedBrowser() {
   const admin = createClient(SB, SRK, { auth: { autoRefreshToken: false, persistSession: false } });

@@ -75,6 +75,12 @@ export default async function WorkoutDetailPage({
                     <span>Série {s.set_number}</span>
                     <span className="text-foreground">
                       {s.reps ?? "?"} reps · {formatWeight(s.weight_kg)}
+                      {/* Lot 25 : le RPE est collecté depuis le Lot 12 et
+                          n'était jamais relu. Une donnée saisie et jamais
+                          affichée est une donnée qu'on arrête de saisir. */}
+                      {s.rpe != null && (
+                        <span className="text-muted"> · RPE {s.rpe}</span>
+                      )}
                     </span>
                   </li>
                 ))}

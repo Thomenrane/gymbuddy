@@ -5,6 +5,7 @@
 // cache-froid vs cache-chaud (effet staleTimes).
 import { authedBrowser, BASE, check, summary } from "./lib.mjs";
 
+// Lot 23 : « / » est le Plan de la semaine, plus le journal du jour.
 const TABS = ["/", "/training", "/recettes", "/tendances"];
 const heap = (page) =>
   page.evaluate(() => (performance.memory ? performance.memory.usedJSHeapSize : 0));

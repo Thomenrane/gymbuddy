@@ -34,7 +34,7 @@ export default async function CoursesPage({
     <main className="space-y-4">
       <div className="flex items-center gap-1">
         <Link
-          href={`/plan?week=${monday}`}
+          href={`/?week=${monday}`}
           aria-label="Retour au plan"
           className="flex h-10 w-10 items-center justify-center rounded-md text-muted active:bg-surface"
         >

@@ -80,7 +80,7 @@ check(
 );
 
 // --- Rendu authentifié de l'écran Aujourd'hui ---
-const pageRes = await fetch(`${BASE}/?date=${D}`, { headers: { cookie } });
+const pageRes = await fetch(`${BASE}/journal?date=${D}`, { headers: { cookie } });
 const html = await pageRes.text();
 check("page Aujourd'hui rendue authentifiée (200, pas de redirect login)", pageRes.status === 200 && !html.includes("Lien de connexion"));
 

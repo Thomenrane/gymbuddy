@@ -16,8 +16,16 @@ const has = (html, needle, label) => check(`  ${label}`, html.includes(needle), 
 const hasRe = (html, re, label) => check(`  ${label}`, re.test(html), `manque : ${re}`);
 
 try {
-  // 1. Aujourd'hui
-  let html = await screen("/", "Aujourd'hui");
+  // 1. Accueil = Plan de la semaine (Lot 23)
+  let html = await screen("/", "Plan (accueil)");
+  has(html, ">Plan<", "titre Plan");
+  has(html, "/plan/courses", "accès Liste de courses");
+  has(html, "poisson gras", "compteur poisson gras");
+  has(html, "/journal", "accès au journal du jour (sinon orphelin)");
+  has(html, "/reglages", "accès aux réglages (sinon orphelin)");
+
+  // 1bis. Journal du jour — hors barre d'onglets, toujours complet
+  html = await screen("/journal", "Journal du jour");
   has(html, 'data-testid="weight-widget"', "widget pesée");
   has(html, "Ajouter", "boutons d'ajout de repas");
   hasRe(html, /kcal/, "résumé macros (kcal)");
@@ -49,12 +57,6 @@ try {
   has(html, ">Réglages", "titre Réglages");
   has(html, "/api/mcp", "URL du connecteur MCP affichée");
   hasRe(html, /2270|kcal/, "édition des cibles");
-
-  // 6. Plan
-  html = await screen("/plan", "Plan");
-  has(html, ">Plan<", "titre Plan");
-  has(html, "/plan/courses", "accès Liste de courses");
-  has(html, "poisson gras", "compteur poisson gras");
 
   // 7. Liste de courses
   html = await screen("/plan/courses", "Liste de courses");

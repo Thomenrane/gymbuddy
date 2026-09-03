@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ForkKnife,
+  CalendarBlank,
   Barbell,
   BookOpen,
   ChartLineUp,
   type Icon,
 } from "@phosphor-icons/react";
 
+// Lot 23 : l'onglet « Aujourd'hui » (journal du jour) n'était plus jamais
+// utilisé — tout passe par Claude via MCP. Le Plan de la semaine prend sa
+// place ; le journal reste atteignable depuis l'en-tête du Plan (/journal),
+// c'est là qu'on relit et corrige ce que Claude encode.
 const TABS: { href: string; label: string; icon: Icon }[] = [
-  { href: "/", label: "Aujourd'hui", icon: ForkKnife },
+  { href: "/", label: "Plan", icon: CalendarBlank },
   { href: "/training", label: "Training", icon: Barbell },
   { href: "/recettes", label: "Recettes", icon: BookOpen },
   { href: "/tendances", label: "Tendances", icon: ChartLineUp },

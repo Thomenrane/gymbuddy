@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
-import { latestSetsByExercise, type LastSetRow, type LastSets } from "@/lib/last-sets.mjs";
+import {
+  latestSetsByExercise,
+  setsFromLatestRows,
+  type LastSetRow,
+  type LastSets,
+  type LatestSetRow,
+} from "@/lib/last-sets.mjs";
 import type {
   Exercise,
   Workout,
@@ -79,6 +85,72 @@ export async function getExerciseCatalog(): Promise<Exercise[]> {
 }
 
 /**
+ * Contexte complet d'UN exercice, pour l'ajouter en cours de séance avec les
+ * mêmes informations qu'un exercice de template (Lot 20) : ses consignes, sa
+ * cible de poids et sa dernière perf.
+ *
+ * Les consignes (séries, fourchette, RPE, repos) sont une propriété du
+ * TEMPLATE, pas de l'exercice : on prend celles du template actif qui le
+ * contient, par ordre alphabétique quand il y en a plusieurs (déterministe).
+ * Aucun template → pas de consignes, on retombe sur la dernière perf.
+ */
+export async function getExerciseContext(exerciseId: string): Promise<{
+  exercise: Exercise;
+  defaults: TemplateDefaults | null;
+  last: LastSets | null;
+} | null> {
+  const supabase = await createClient();
+  const [exerciseRes, templateRes, lastMap] = await Promise.all([
+    supabase.from("exercises").select("*").eq("id", exerciseId).maybeSingle(),
+    supabase
+      .from("template_exercises")
+      .select(
+        "default_sets, default_reps_min, default_reps_max, target_rpe, rest_seconds, template:workout_templates!inner(name, is_active)"
+      )
+      .eq("exercise_id", exerciseId)
+      .eq("template.is_active", true),
+    getLastSets([exerciseId]),
+  ]);
+  if (!exerciseRes.data) return null;
+
+  const rows = (templateRes.data ?? []) as unknown as TemplateDefaultsRow[];
+  const pick = [...rows].sort((a, b) =>
+    (a.template?.name ?? "").localeCompare(b.template?.name ?? "")
+  )[0];
+
+  return {
+    exercise: exerciseRes.data as Exercise,
+    defaults: pick
+      ? {
+          sets: pick.default_sets,
+          repsMin: pick.default_reps_min,
+          repsMax: pick.default_reps_max,
+          rpe: pick.target_rpe,
+          rest: pick.rest_seconds,
+        }
+      : null,
+    last: lastMap.get(exerciseId) ?? null,
+  };
+}
+
+export type TemplateDefaults = {
+  sets: number | null;
+  repsMin: number | null;
+  repsMax: number | null;
+  rpe: number | null;
+  rest: number | null;
+};
+
+type TemplateDefaultsRow = {
+  default_sets: number | null;
+  default_reps_min: number | null;
+  default_reps_max: number | null;
+  target_rpe: number | null;
+  rest_seconds: number | null;
+  template: { name: string; is_active: boolean } | null;
+};
+
+/**
  * Référence "dernière fois" pour chaque exercice demandé : les sets de son
  * workout le plus récent (baselines comprises). Cœur du pré-remplissage.
  */
@@ -87,6 +159,35 @@ export async function getLastSets(
 ): Promise<Map<string, LastSets>> {
   if (exerciseIds.length === 0) return new Map();
   const supabase = await createClient();
+
+  // Lot 25 : le tri « dernier workout » se fait en base (DISTINCT ON), qui ne
+  // renvoie que les séries utiles. L'ancienne requête ramenait TOUT
+  // l'historique de chaque exercice pour n'en garder qu'une poignée de lignes.
+  const rpc = await supabase.rpc("latest_sets_by_exercise", {
+    exercise_ids: exerciseIds,
+  });
+  if (!rpc.error) {
+    return setsFromLatestRows((rpc.data ?? []) as LatestSetRow[]);
+  }
+  // Le repli n'existe que pour UN cas : la fonction n'est pas encore en base
+  // (PGRST202 côté PostgREST, 42883 côté Postgres). Traiter n'importe quelle
+  // erreur comme « migration absente » ferait retomber silencieusement et
+  // définitivement sur le scan complet que ce lot supprime — un timeout ou un
+  // droit révoqué passerait pour normal. Tout le reste doit remonter.
+  const missing =
+    rpc.error.code === "PGRST202" ||
+    rpc.error.code === "42883" ||
+    /does not exist|could not find the function/i.test(rpc.error.message ?? "");
+  if (!missing) {
+    throw new Error(`getLastSets (rpc): ${rpc.error.message}`);
+  }
+  console.warn(
+    "latest_sets_by_exercise absente : repli sur le scan complet. Appliquer supabase/migrations/20260902000001_latest_sets_rpc.sql."
+  );
+
+  // Repli : migration pas encore appliquée. L'ordre déploiement / migration n'a
+  // donc aucune importance, et le résultat est identique (prouvé par
+  // scripts/last-sets.test.mjs).
   const { data, error } = await supabase
     .from("workout_sets")
     .select(
@@ -96,3 +197,4 @@ export async function getLastSets(
   if (error) throw new Error(`getLastSets: ${error.message}`);
   return latestSetsByExercise((data ?? []) as unknown as LastSetRow[]);
 }
+

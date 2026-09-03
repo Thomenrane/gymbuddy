@@ -19,7 +19,7 @@ try {
   const { browser: b, page: p } = await authedBrowser();
   browser = b;
   page = p;
-  await page.goto(`${BASE}/?date=${DTEST}`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/journal?date=${DTEST}`, { waitUntil: "networkidle" });
 
   // Ouvre la sheet d'ajout du premier slot, puis le mode scan.
   await page.getByRole("button", { name: "Ajouter" }).first().click();

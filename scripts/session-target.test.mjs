@@ -80,44 +80,56 @@ const echauffement = {
 };
 t(`reps prises à la charge de travail, pas à l'échauffement`, label(echauffement) === "3×6 @ 67.5 kg", label(echauffement));
 
-// Assistance (Pull-Ups du screenshot) : dernière 4×8 @ assist. 14, cible 14
-// (stockée positive côté MCP) → même difficulté, on garde 8.
+// Assistance (Pull-Ups du screenshot) : dernière 4×8 @ assist. 14, cible -14
+// (SIGNÉE depuis le Lot 26) → même difficulté, on garde 8.
 const pullups = {
   defaults: { sets: 4, repsMin: 6, repsMax: 8 },
-  targetWeight: 14,
+  targetWeight: -14,
   last: { sets: Array.from({ length: 4 }, () => ({ reps: 8, weight_kg: -14 })) },
 };
 const pu = sessionTarget(pullups);
-t(`assistance détectée depuis le signe de la dernière perf`, pu.assist === true);
+t(`assistance portée par le signe de la cible`, pu.assist === true);
 t(`assistance : poids d'objectif toujours positif en interne`, pu.weight === 14);
 t(`assistance stable → « 4×8 @ assist. 14 kg »`, label(pullups) === "4×8 @ assist. 14 kg", label(pullups));
 
-// MOINS d'assistance = plus dur → on repart en bas de fourchette.
-const pullupsDur = { ...pullups, targetWeight: 12 };
+// MOINS d'assistance = plus dur → on repart en bas de fourchette. Une cible de
+// -12 est PLUS GRANDE que -14 au sens signé : la comparaison est la même que
+// pour une charge qui monte, sans branche « si assisté ».
+const pullupsDur = { ...pullups, targetWeight: -12 };
 t(`assistance réduite → plus dur → « 4×6 @ assist. 12 kg »`, label(pullupsDur) === "4×6 @ assist. 12 kg", label(pullupsDur));
 
-// Le SIGNE de la cible n'existe nulle part : set_exercise_target impose
-// target_weight_kg > 0, Claude écrit « ASSISTANCE 14 kg » en prose. Sans
-// historique chargé, pré-remplir 14 dans une colonne « poids (kg) » ferait
-// enregistrer +14 kg lestés pour une séance assistée, d'un seul tap.
-const signeInconnu = {
+// Lot 26 — le SIGNE voyage avec la cible, donc plus aucun cas « magnitude
+// connue, convention inconnue ». Avant, set_exercise_target imposait > 0 et
+// Claude écrivait « ASSISTANCE 14 kg » en prose : sur un exercice au poids du
+// corps sans historique chargé, la case restait vide pour ne pas enregistrer
+// +14 kg LESTÉS d'un tap. Maintenant -14 dit tout, et la case est pré-remplie.
+const pdcAssiste = {
   defaults: { sets: 4, repsMin: 6, repsMax: 8 },
-  targetWeight: 14,
+  targetWeight: -14,
   last: { sets: [{ reps: 8, weight_kg: null }] },
 };
-const si = sessionTarget(signeInconnu);
-t("poids du corps + cible → charge NON pré-remplie (signe inconnu)", si.weight === null, String(si.weight));
-t("poids du corps + cible → libellé sans charge affirmée", formatTarget(si) === "4×8", formatTarget(si));
-t("poids du corps + cible → case poids vide", targetRows(si)[0].weight === "");
+const pa = sessionTarget(pdcAssiste);
+t("poids du corps + cible assistée → assistance, sans historique chargé", pa.assist === true && pa.weight === 14, JSON.stringify(pa));
+t("poids du corps + cible assistée → « 4×8 @ assist. 14 kg »", formatTarget(pa) === "4×8 @ assist. 14 kg", formatTarget(pa));
+t("poids du corps + cible assistée → case poids pré-remplie", targetRows(pa)[0].weight === "14");
+
+// Le même exercice avec une cible POSITIVE veut maintenant dire « lesté » —
+// c'est un sens, plus une ambiguïté. Le garde-fou qui empêche Claude de poser
+// une cible positive sur un exercice assisté est côté service (Lot 26).
+const pdcLeste = { ...pdcAssiste, targetWeight: 5 };
+const pl = sessionTarget(pdcLeste);
+t("poids du corps + cible positive → lesté assumé", pl.assist === false && pl.weight === 5);
+
 const jamaisFait = sessionTarget({ defaults: { sets: 3, repsMin: 8, repsMax: 12 }, targetWeight: 20, last: null });
-t("exercice jamais fait + cible → charge NON pré-remplie", jamaisFait.weight === null && targetRows(jamaisFait)[0].weight === "");
-// Dès qu'une charge signée existe, la cible est pré-remplie normalement.
-const signeConnuAssist = sessionTarget({
+t("exercice jamais fait + cible → charge pré-remplie (signe connu)", jamaisFait.weight === 20 && targetRows(jamaisFait)[0].weight === "20");
+// La cible fait autorité sur l'historique, y compris pour changer de convention.
+const bascule = sessionTarget({
   defaults: { sets: 4, repsMin: 6, repsMax: 8 },
-  targetWeight: 12,
-  last: { sets: [{ reps: 8, weight_kg: -14 }] },
+  targetWeight: 2.5,
+  last: { sets: [{ reps: 8, weight_kg: -5 }] },
 });
-t("historique assisté → cible pré-remplie côté assistance", signeConnuAssist.weight === 12 && signeConnuAssist.assist === true);
+t("assisté la dernière fois, cible lestée → la cible fait foi", bascule.assist === false && bascule.weight === 2.5, JSON.stringify(bascule));
+t("assisté → lesté : c'est plus dur, donc bas de fourchette", formatTarget(bascule) === "4×6 @ 2.5 kg", formatTarget(bascule));
 const signeConnuCharge = sessionTarget({
   defaults: { sets: 4, repsMin: 6, repsMax: 8 },
   targetWeight: 70,

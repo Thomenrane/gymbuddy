@@ -508,13 +508,16 @@ const handler = createMcpHandler(
 
     server.tool(
       "set_exercise_target",
-      "Pose/met à jour/efface la CIBLE de poids d'un exercice (prochain poids à viser, affiché en séance à côté du dernier poids fait). Match par nom sur le catalogue. target_weight_kg=null efface la cible. À poser après chaque séance selon la progression réelle (double progression : haut de fourchette atteint + RPE ≤ cible → +2,5 kg).",
+      "Pose/met à jour/efface la CIBLE de poids d'un exercice (prochain poids à viser, affiché en séance à côté du dernier poids fait). Match par nom sur le catalogue. target_weight_kg=null efface la cible. À poser après chaque séance selon la progression réelle (double progression : haut de fourchette atteint + RPE ≤ cible → +2,5 kg). SIGNE OBLIGATOIRE, même convention que les séries (weight_kg) : positif = charge ajoutée, NÉGATIF = assistance. Sur un exercice assisté (tractions à la machine, dips assistés), progresser = RÉDUIRE l'aide, donc aller de -14 vers -12. Une cible positive sur un exercice dont les dernières séries sont assistées est REFUSÉE : elle serait lue comme un lest et pré-remplirait l'écran séance à l'envers.",
       {
         exercise_name: z.string().describe("Nom de l'exercice (match sur le catalogue)"),
         target_weight_kg: z
           .number()
           .nullable()
-          .describe("Poids cible en kg (> 0), ou null pour effacer la cible"),
+          .describe(
+            "Poids cible en kg, SIGNÉ : positif = charge ajoutée, négatif = assistance " +
+              "(ex. -12 pour 12 kg d'aide). Non nul. null efface la cible."
+          ),
         target_weight_note: z
           .string()
           .optional()

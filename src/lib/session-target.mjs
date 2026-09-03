@@ -4,9 +4,9 @@
 // n'invente aucune progression (décision Lot 14 : « aucun calcul de cible
 // dans l'app ») :
 //   - le TEMPLATE donne le nombre de séries et la fourchette de reps
-//   - la CIBLE de poids (exercises.target_weight_kg) est posée par Claude
-//   - la DERNIÈRE PERF sert de repli, et donne le signe (poids négatif =
-//     assistance, AMENDEMENT 3)
+//   - la CIBLE de poids (exercises.target_weight_kg) est posée par Claude,
+//     SIGNÉE depuis le Lot 26 : négatif = assistance (AMENDEMENT 3)
+//   - la DERNIÈRE PERF sert de repli quand il n'y a pas de cible
 //
 // Règle de reps (double progression, sans extrapolation) :
 //   - la charge MONTE (cible > dernier poids ; en assistance, MOINS d'aide =
@@ -73,27 +73,28 @@ function workingSet(sets) {
 export function sessionTarget({ defaults, targetWeight, last } = {}) {
   const d = defaults ?? {};
   const done = last?.sets ?? [];
-  const { reps: doneReps, load: doneLoad, assist } = workingSet(done);
-  const target = num(targetWeight);
+  const { reps: doneReps, load: doneLoad, assist: doneAssist } = workingSet(done);
 
-  // Le SIGNE (charge ajoutée ou assistance) n'est nulle part dans la cible :
-  // set_exercise_target impose target_weight_kg > 0, Claude l'écrit donc en
-  // prose (« ASSISTANCE 14 kg (soit -14) »). Il ne peut être déduit que d'une
-  // charge déjà enregistrée. Sans historique chargé, on connaît la magnitude
-  // mais PAS la convention : pré-remplir « 14 » dans une case dont l'en-tête
-  // dit « poids (kg) » ferait enregistrer +14 kg lestés pour une séance
-  // assistée — le pré-remplissage rend l'erreur invisible et validable d'un
-  // tap. On laisse donc la case vide et la cible s'affiche derrière le ⓘ.
-  const signKnown = doneLoad != null;
-  const weight = target != null ? (signKnown ? Math.abs(target) : null) : doneLoad;
+  // Lot 26 : la cible est SIGNÉE, comme workout_sets.weight_kg (AMENDEMENT 3) —
+  // négatif = assistance. Avant, set_exercise_target imposait > 0 : le signe
+  // n'existait nulle part et l'app devait le déduire d'une charge déjà
+  // enregistrée. Sur un exercice au poids du corps sans historique chargé, une
+  // cible « assistance 14 » arrivait donc comme +14 sous un en-tête « poids
+  // (kg) » — soit 14 kg LESTÉS enregistrés pour une séance assistée, validables
+  // d'un tap. La magnitude et la convention voyagent maintenant ensemble.
+  const targetSigned = num(targetWeight);
+  const doneSigned = doneLoad == null ? null : doneAssist ? -doneLoad : doneLoad;
+  const signed = targetSigned ?? doneSigned;
+  const weight = signed == null ? null : Math.abs(signed);
+  const assist = signed == null ? doneAssist : signed < 0;
 
   const min = num(d.repsMin);
   const max = num(d.repsMax);
-  // En assistance, une cible PLUS BASSE que la dernière fois est plus dure.
-  const heavier =
-    weight != null &&
-    doneLoad != null &&
-    (assist ? weight < doneLoad : weight > doneLoad);
+  // La difficulté est ordonnée par le poids SIGNÉ : -14 (assisté) < 0 < +5
+  // (lesté). Une seule comparaison couvre donc les deux conventions, y compris
+  // la transition assistance → lest ; « moins d'aide » (-14 → -12) est bien lu
+  // comme plus dur.
+  const heavier = signed != null && doneSigned != null && signed > doneSigned;
 
   // La charge monte → bas de fourchette ; sinon → au moins la dernière fois.
   // Le plafond s'applique dans LES DEUX cas : sans `default_reps_min` (colonne
